@@ -4,13 +4,14 @@ const bcrypt = require('bcryptjs')
 const prisma = new PrismaClient()
 
 async function main() {
-  // 创建管理员
-  const adminPassword = 'admin1234'
+  // 创建管理员：使用您提供的管理员账号
+  const adminUsername = 'szzx202409'
+  const adminPassword = 'szzx202409'
   const hash = await bcrypt.hash(adminPassword, 10)
   await prisma.admin.upsert({
-    where: { username: 'admin' },
+    where: { username: adminUsername },
     update: { passwordHash: hash },
-    create: { username: 'admin', passwordHash: hash }
+    create: { username: adminUsername, passwordHash: hash }
   })
 
   // 创建 48 个示例学生
