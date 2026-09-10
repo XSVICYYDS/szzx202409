@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id        Int     @id @default(autoincrement())
+  studentNo String  @unique
+  name      String
+  bio       String?
+  poems     Poem[]
+}
+
+model Poem {
+  id        Int     @id @default(autoincrement())
+  title     String  @default("未命名")
+  content   String  @db.Text
+  student   Student @relation(fields: [studentId], references: [id])
+  studentId Int
+  status    String  @default("draft")
+  createdAt DateTime @default(now())
+}
+
+model Admin {
+  id           Int    @id @default(autoincrement())
+  username     String @unique
+  passwordHash String
+}
