@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>学生登录 · 尚志中学 2024 届 09 班</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <div id="nav"></div>
+
+  <section class="section-tight">
+    <div class="wrap">
+      <div class="panel" id="box">
+        <h2>学生登录</h2>
+        <p class="lead">输入你的学号即可登录，进入个人诗页。</p>
+        <div id="msg"></div>
+        <div class="field">
+          <label for="no">学号</label>
+          <input class="input" id="no" inputmode="numeric" placeholder="例如：202409001" autocomplete="off" />
+          <div class="hint">学号范围：202409001 — 202409048</div>
+        </div>
+        <button class="btn btn-primary" id="btn" style="width:100%;">登录</button>
+        <p class="hint center mt16">提示：本站为静态站点，登录仅用于识别身份，无密码保护。</p>
+      </div>
+    </div>
+  </section>
+
+  <div id="footer"></div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      SZX.mountNav("login");
+      SZX.mountFooter();
+
+      var msg = document.getElementById("msg");
+      var input = document.getElementById("no");
+      var btn = document.getElementById("btn");
+
+      // 已登录则提示
+      if (SZX.isStudent()) {
+        msg.innerHTML = '<div class="msg info">你已登录（学号 ' + SZX.escapeHtml(SZX.currentStudentNo()) +
+          '）。<a href="student.html?no=' + encodeURIComponent(SZX.currentStudentNo()) + '">进入我的诗页 →</a> · <a href="#" id="lo">退出</a></div>';
+        var lo = document.getElementById("lo");
+        if (lo) lo.addEventListener("click", function (e) { e.preventDefault(); SZX.logout(); location.reload(); });
+      }
+
+      function doLogin() {
+        var no = input.value.trim();
+        var r = SZX.loginStudent(no);
+        if (r.ok) {
+          msg.innerHTML = '<div class="msg ok">登录成功！即将进入个人诗页…</div>';
+          setTimeout(function () { location.href = "student.html?no=" + encodeURIComponent(no); }, 600);
+        } else {
+          msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml(r.msg) + '</div>';
+          input.focus();
+        }
+      }
+
+      btn.addEventListener("click", doLogin);
+      input.addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+    });
+  </script>
+</body>
+</html>
