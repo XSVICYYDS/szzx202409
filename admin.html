@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理后台 · 尚志中学 2024 届 09 班</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <div id="nav"></div>
+
+  <section class="section-tight">
+    <div class="wrap" id="root"></div>
+  </section>
+
+  <div id="footer"></div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      SZX.mountNav("admin");
+      SZX.mountFooter();
+      var root = document.getElementById("root");
+
+      /* ---- 未登录：显示登录表单 ---- */
+      if (!SZX.isAdmin()) {
+        root.innerHTML =
+          '<div class="panel">' +
+          '<h2>管理员登录</h2><p class="lead">管理员可管理学生资料、上传与审核诗歌。</p>' +
+          '<div id="msg"></div>' +
+          '<div class="field"><label>用户名</label><input class="input" id="u" autocomplete="off" placeholder="管理员用户名" /></div>' +
+          '<div class="field"><label>密码</label><input class="input" id="p" type="password" placeholder="管理员密码" /></div>' +
+          '<button class="btn btn-primary" id="btn" style="width:100%;">登录</button>' +
+          '<p class="hint center mt16">默认账号：szzx202409 / szzx202409</p>' +
+          '</div>';
+        var msg = document.getElementById("msg");
+        document.getElementById("btn").addEventListener("click", function () {
+          var u = document.getElementById("u").value.trim();
+          var p = document.getElementById("p").value;
+          var r = SZX.loginAdmin(u, p);
+          if (r.ok) { location.reload(); }
+          else { msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml(r.msg) + '</div>'; }
+        });
+        document.getElementById("p").addEventListener("keydown", function (e) { if (e.key === "Enter") document.getElementById("btn").click(); });
+        return;
+      }
+
+      /* ---- 已登录：后台仪表盘 ---- */
+      var params = new URLSearchParams(location.search);
+      var preNo = params.get("no") || "";
+
+      function studentOptions(sel) {
+        return SZX.getAllStudents().map(function (s) {
+          return '<option value="' + SZX.escapeHtml(s.studentNo) + '">' +
+            SZX.escapeHtml(s.name) + '（' + SZX.escapeHtml(s.studentNo) + '）</option>';
+        }).join("");
+      }
+
+      function stats() {
+        var poems = SZX.getPoems();
+        var set = {};
+        poems.forEach(function (p) { set[p.studentNo] = 1; });
+        return { total: poems.length, withPoems: Object.keys(set).length };
+      }
+
+      function render() {
+        var st = stats();
+        var poems = SZX.getPoems().sort(function (a, b) {
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        });
+
+        var s = preNo ? SZX.getStudent(preNo) : null;
+        var head = '<div class="between"><div><h2 style="font-family:var(--serif);margin:0;color:var(--indigo-dk);">管理后台</h2>' +
+          '<p class="muted" style="margin:4px 0 0;">诗歌总数 ' + st.total + ' · 有诗歌同学 ' + st.withPoems + ' / 48</p></div>' +
+          '<div class="row"><a class="btn btn-ghost2" href="students.html">同学名录</a>' +
+          '<button class="btn-ghost btn" id="logout">退出</button></div></div>';
+
+        // 添加/编辑诗歌
+        var addCard = '<div class="panel wide mt24" id="add">' +
+          '<h2 id="formTitle">添加诗歌</h2>' +
+          '<div id="fmsg"></div>' +
+          '<div class="row" style="align-items:flex-start;">' +
+          '<div class="field" style="flex:1 1 240px;"><label>选择同学</label>' +
+          '<select class="input" id="fno">' + studentOptions() + '</select></div>' +
+          '<div class="field" style="flex:2 1 320px;"><label>诗歌标题</label>' +
+          '<input class="input" id="ftitle" placeholder="例如：少年行" /></div></div>' +
+          '<div class="field"><label>诗歌内容</label>' +
+          '<textarea class="textarea" id="fcontent" placeholder="在此输入或粘贴诗歌正文…"></textarea>' +
+          '<div class="hint">换行将保留。</div></div>' +
+          '<div class="row"><div class="field" style="flex:0 0 200px;"><label>状态</label>' +
+          '<select class="input" id="fstatus"><option value="published">已发布</option><option value="draft">草稿</option></select></div>' +
+          '<div style="flex:1;text-align:right;padding-top:24px;">' +
+          '<button class="btn btn-ghost2" id="reset">清空</button> ' +
+          '<button class="btn btn-primary" id="save">保存诗歌</button></div></div>' +
+          '<input type="hidden" id="fid" value="" /></div>';
+
+        var list = '<div class="mt24 between"><h3 style="font-family:var(--serif);margin:0;color:var(--indigo-dk);">所有诗歌</h3>' +
+          '<input class="input" id="q" placeholder="按作者/标题/学号筛选" style="max-width:280px;" /></div>' +
+          '<div class="mt16" id="poemList"></div>';
+
+        // 发布面板：导出 poems.json 并提交到 GitHub，让所有人可见
+        var exportCard = '<div class="panel wide mt24">' +
+          '<h2 style="font-family:var(--serif);color:var(--indigo-dk);">发布诗歌 · 让所有人可见</h2>' +
+          '<p class="lead">上方「添加诗歌」保存的是<span style="color:var(--warn);">本地暂存</span>，只有你的浏览器能看到。要让全班同学都看到，需把诗歌导出为 <code>data/poems.json</code> 并提交到 GitHub 仓库。</p>' +
+          '<div class="msg info" style="margin-bottom:14px;"><b>步骤：</b>1) 点「导出 poems.json」下载文件 → 2) 打开 <a href="https://github.com/XSVICYYDS/szzx202409/blob/main/data/poems.json" target="_blank">仓库 data/poems.json</a>，点右上角 ✏️ 编辑 → 3) 粘贴覆盖内容并提交 → 4) 等约 1 分钟，刷新本站，所有人即可看到。</div>' +
+          '<div class="row">' +
+          '<button class="btn btn-gold" id="exportJson">⬇ 导出 poems.json</button> ' +
+          '<button class="btn btn-ghost2" id="copyJson">复制 JSON</button> ' +
+          '<button class="btn btn-danger" id="clearLocal">清空本地暂存</button></div>' +
+          '<div class="field mt16"><label>当前 poems.json 内容（共享 + 本地暂存合并）</label>' +
+          '<textarea class="textarea" id="jsonView" readonly style="min-height:180px;font-family:monospace;font-size:13px;"></textarea></div>' +
+          '<div id="expMsg"></div></div>';
+
+        root.innerHTML = head + addCard + list + exportCard;
+
+        // 填充 JSON 预览
+        document.getElementById("jsonView").value = SZX.exportPoemsJson();
+
+        // 预选同学
+        if (s) { document.getElementById("fno").value = s.studentNo; }
+
+        // 渲染诗歌列表
+        function renderList() {
+          var kw = (document.getElementById("q").value || "").trim().toLowerCase();
+          var arr = poems.filter(function (p) {
+            if (!kw) return true;
+            return (p.author || "").toLowerCase().indexOf(kw) !== -1 ||
+              (p.title || "").toLowerCase().indexOf(kw) !== -1 ||
+              (p.studentNo || "").indexOf(kw) !== -1;
+          });
+          var box = document.getElementById("poemList");
+          if (arr.length === 0) {
+            box.innerHTML = '<div class="empty"><div class="big">还没有诗歌</div><div>使用上方表单为同学添加第一首诗。</div></div>';
+            return;
+          }
+          box.innerHTML = '<div class="poems">' + arr.map(function (p) {
+            var srcTag = p.__source === "shared"
+              ? '<span class="tag">共享</span> <span class="muted" style="font-size:12px;">所有人可见·需编辑 data/poems.json</span>'
+              : '<span class="tag draft">本地暂存</span> <span class="muted" style="font-size:12px;">仅本机可见·导出并提交后对所有人可见</span>';
+            var actions = (p.__source === "local")
+              ? '<div class="pactions"><button class="btn btn-ghost2" data-edit="' + SZX.escapeHtml(p.id) + '">编辑</button> ' +
+                '<button class="btn btn-danger" data-del="' + SZX.escapeHtml(p.id) + '">删除</button> ' +
+                '<a class="btn btn-ghost2" href="student.html?no=' + encodeURIComponent(p.studentNo) + '">查看页</a></div>'
+              : '<div class="pactions"><a class="btn btn-ghost2" href="student.html?no=' + encodeURIComponent(p.studentNo) + '">查看页</a> ' +
+                '<span class="muted" style="align-self:center;font-size:12px;">共享诗歌请在 data/poems.json 中编辑</span></div>';
+            return '<div class="poem"><div class="pmeta">' + SZX.escapeHtml(p.author) + ' · 学号 ' +
+              SZX.escapeHtml(p.studentNo) + ' · ' + SZX.fmtDate(p.createdAt) +
+              ' · <span class="tag ' + p.status + '">' + (p.status === "published" ? "已发布" : "草稿") + '</span> · ' + srcTag + '</div>' +
+              '<div class="ptitle">' + SZX.escapeHtml(p.title) + '</div>' +
+              '<div class="pbody">' + SZX.escapeHtml(p.content.slice(0, 260)) + (p.content.length > 260 ? '…' : '') + '</div>' +
+              actions + '</div>';
+          }).join("") + '</div>';
+        }
+        renderList();
+
+        document.getElementById("q").addEventListener("input", renderList);
+
+        // 退出
+        document.getElementById("logout").addEventListener("click", function () {
+          SZX.logout(); location.href = "index.html";
+        });
+
+        // 清空
+        document.getElementById("reset").addEventListener("click", function () {
+          document.getElementById("fid").value = "";
+          document.getElementById("ftitle").value = "";
+          document.getElementById("fcontent").value = "";
+          document.getElementById("fstatus").value = "published";
+          document.getElementById("formTitle").textContent = "添加诗歌";
+          document.getElementById("fmsg").innerHTML = "";
+        });
+
+        // 保存（新增/更新）
+        document.getElementById("save").addEventListener("click", function () {
+          var fmsg = document.getElementById("fmsg");
+          var no = document.getElementById("fno").value;
+          var title = document.getElementById("ftitle").value.trim();
+          var content = document.getElementById("fcontent").value.trim();
+          var status = document.getElementById("fstatus").value;
+          var id = document.getElementById("fid").value;
+          if (!no) { fmsg.innerHTML = '<div class="msg error">请选择同学</div>'; return; }
+          if (!content) { fmsg.innerHTML = '<div class="msg error">诗歌内容不能为空</div>'; return; }
+          if (!title) title = "未命名";
+          if (id) {
+            SZX.updatePoem(id, { studentNo: no, title: title, content: content, status: status });
+            fmsg.innerHTML = '<div class="msg ok">已更新诗歌</div>';
+          } else {
+            SZX.addPoem({ studentNo: no, title: title, content: content, status: status });
+            fmsg.innerHTML = '<div class="msg ok">已添加诗歌</div>';
+          }
+          // 刷新
+          setTimeout(function () { render(); }, 500);
+        });
+
+        // 列表事件代理：编辑/删除
+        document.getElementById("poemList").addEventListener("click", function (e) {
+          var t = e.target;
+          var ed = t.getAttribute("data-edit");
+          var dl = t.getAttribute("data-del");
+          if (ed) {
+            var p = SZX.getPoem(ed);
+            if (p) {
+              document.getElementById("fid").value = p.id;
+              document.getElementById("fno").value = p.studentNo;
+              document.getElementById("ftitle").value = p.title;
+              document.getElementById("fcontent").value = p.content;
+              document.getElementById("fstatus").value = p.status;
+              document.getElementById("formTitle").textContent = "编辑诗歌";
+              document.getElementById("fmsg").innerHTML = '<div class="msg info">正在编辑：' + SZX.escapeHtml(p.title) + '</div>';
+              document.getElementById("add").scrollIntoView({ behavior: "smooth" });
+            }
+          }
+          if (dl) {
+            if (confirm("确定删除这首诗歌？此操作不可撤销。")) {
+              SZX.deletePoem(dl);
+              render();
+            }
+          }
+        });
+      }
+
+      // 先加载共享诗歌，再渲染仪表盘
+      SZX.loadShared().then(function () { render(); });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人诗页 · 尚志中学 2024 届 09 班</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <div id="nav"></div>
+
+  <section class="section-tight">
+    <div class="wrap" id="root"></div>
+  </section>
+
+  <div id="footer"></div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      SZX.mountNav("students");
+      SZX.mountFooter();
+
+      SZX.loadShared().then(function () {
+      var params = new URLSearchParams(location.search);
+      var no = params.get("no") || "";
+      var s = SZX.getStudent(no);
+      var root = document.getElementById("root");
+
+      if (!s) {
+        root.innerHTML = '<div class="panel center"><h2>未找到该同学</h2><p class="lead">学号不正确或不存在。</p>' +
+          '<a class="btn btn-primary" href="students.html">返回同学名录</a></div>';
+        return;
+      }
+
+      var initials = s.name.replace("学生", "");
+      var poems = SZX.getPoemsByStudent(no);
+      var isOwner = SZX.isStudent() && SZX.currentStudentNo() === no;
+      var isAdmin = SZX.isAdmin();
+
+      var head = '<div class="profile-head">' +
+        '<div class="avatar-lg">' + SZX.escapeHtml(initials) + '</div>' +
+        '<div><div class="pno">学号 ' + SZX.escapeHtml(s.studentNo) + '</div>' +
+        '<h2 class="pname">' + SZX.escapeHtml(s.name) + '</h2>' +
+        '<div class="pbio">' + SZX.escapeHtml(s.bio) + '</div></div></div>';
+
+      var actions = (isOwner || isAdmin)
+        ? '<div class="between mt16"><div></div>' +
+          (isAdmin
+            ? '<a class="btn btn-gold" href="admin.html?no=' + encodeURIComponent(no) + '#add">为该同学添加诗歌</a>'
+            : '<span class="muted">你是本人，可联系管理员上传你的诗。</span>') +
+          '</div>'
+        : '';
+
+      var body;
+      if (poems.length === 0) {
+        body = '<div class="empty"><div class="big">诗歌将在未来上传</div>' +
+          '<div>这位同学的诗作尚未收录。' + (isOwner ? '可联系管理员上传你的诗。' : '') + '</div></div>';
+      } else {
+        body = '<div class="poems">' + poems.map(function (p) {
+          return '<div class="poem"><div class="pmeta">' + SZX.escapeHtml(p.author) +
+            ' · ' + SZX.fmtDate(p.createdAt) + ' · <span class="tag ' + p.status + '">' +
+            (p.status === "published" ? "已发布" : "草稿") + '</span></div>' +
+            '<div class="ptitle">' + SZX.escapeHtml(p.title) + '</div>' +
+            '<div class="pbody">' + SZX.escapeHtml(p.content) + '</div></div>';
+        }).join("") + '</div>';
+      }
+
+      root.innerHTML = head + actions + body;
+      });
+    });
+  </script>
+</body>
+</html>
