@@ -8,11 +8,14 @@ datasource db {
 }
 
 model Student {
-  id        Int     @id @default(autoincrement())
-  studentNo String  @unique
-  name      String
-  bio       String?
-  poems     Poem[]
+  id                 Int     @id @default(autoincrement())
+  studentNo          String  @unique
+  username           String  @unique
+  name               String
+  bio                String?
+  passwordHash       String?
+  mustChangePassword Boolean @default(true)
+  poems              Poem[]
 }
 
 model Poem {

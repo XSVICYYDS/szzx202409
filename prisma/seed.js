@@ -14,14 +14,18 @@ async function main() {
     create: { username: adminUsername, passwordHash: hash }
   })
 
-  // 创建 48 个示例学生
+  // 创建 48 个示例学生，用户名规则：szzx2024NN，密码：Xs@09NN
   const students = []
   for (let i = 1; i <= 48; i++) {
+    const suffix = String(i).padStart(2, '0') // 01,02,...,48
     const no = String(202409000 + i)
-    students.push({ studentNo: no, name: `学生${i}`, bio: `这是学生${i}的简介` })
+    const username = `szzx2024${suffix}`
+    const rawPassword = `Xs@09${suffix}`
+    const passwordHash = await bcrypt.hash(rawPassword, 10)
+    students.push({ studentNo: no, username, name: `学生${i}`, bio: `这是学生${i}的简介`, passwordHash, mustChangePassword: true })
   }
   for (const s of students) {
-    await prisma.student.upsert({ where: { studentNo: s.studentNo }, update: {}, create: s })
+    await prisma.student.upsert({ where: { studentNo: s.studentNo }, update: { username: s.username, passwordHash: s.passwordHash, mustChangePassword: true }, create: s })
   }
 
   console.log('seed finished')
