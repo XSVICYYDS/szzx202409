@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>尚志中学 2024 届 09 班 · 班级官方网站</title>
-  <meta name="description" content="尚志中学 2024 届 09 班班级官方网站 — 48 位同学的诗与故事。" />
+  <meta name="description" content="尚志中学 2024 届 09 班班级官方网站 — 48 位同学的作品与故事。" />
   <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body>
@@ -14,15 +14,15 @@
     <div class="wrap hero-inner">
       <div class="crumb">Class of 2024 · No.09</div>
       <h1>尚志中学 2024 届 09 班</h1>
-      <p class="sub">四十八位少年，以诗为记。这里是属于我们班级的官方网站——记录每一位同学的名字与笔下的诗句。</p>
+      <p class="sub">四十八位少年，以作品为记。这里是属于我们班级的官方网站——记录每一位同学的名字与作品。</p>
       <div class="hero-stats">
         <div class="stat"><div class="num">48</div><div class="lbl">班级人数</div></div>
-        <div class="stat"><div class="num" id="statPoems">—</div><div class="lbl">已收录诗歌</div></div>
-        <div class="stat"><div class="num">2024</div><div class="lbl">届别</div></div>
+        <div class="stat"><div class="num" id="statPoems">—</div><div class="lbl">诗歌作品</div></div>
+        <div class="stat"><div class="num" id="statContents">—</div><div class="lbl">班级作品</div></div>
       </div>
       <div class="hero-actions">
         <a class="btn btn-gold" href="students.html">浏览同学名录</a>
-        <a class="btn btn-ghost2" href="login.html">学生登录</a>
+        <a class="btn btn-ghost2" href="gallery.html">查看班级作品</a>
       </div>
     </div>
   </section>
@@ -32,28 +32,28 @@
       <div class="section-head">
         <div class="eyebrow">Our Class</div>
         <h2>关于我们</h2>
-        <p>本站为尚志中学 2024 届 09 班的班级官方网站。班级共 48 人，这里收录每位同学的诗作。诗歌将在未来陆续上传，敬请期待。</p>
+        <p>本站为尚志中学 2024 届 09 班的班级官方网站。班级共 48 人，这里收录每位同学的诗作与上传的作品。学生可登录后上传图片、文字或 Word 文档，经管理员审批后发布。</p>
       </div>
       <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
         <div class="card">
-          <div class="who-row"><div class="avatar">诗</div><div><div class="name">少年诗页</div><div class="no">Poems</div></div></div>
-          <div class="bio">每位同学都有专属个人页面，展示姓名、学号与个人诗作。管理员可上传、编辑与审核诗歌。</div>
+          <div class="who-row"><div class="avatar">作</div><div><div class="name">班级作品</div><div class="no">Gallery</div></div></div>
+          <div class="bio">学生可上传图片、文字和 Word 文档作品。学生上传的内容经管理员审批后发布。</div>
         </div>
         <div class="card">
           <div class="who-row"><div class="avatar">登</div><div><div class="name">学号登录</div><div class="no">Login</div></div></div>
-          <div class="bio">输入学号即可登录，进入自己的个人页面。学号范围为 202409001 — 202409048。</div>
+          <div class="bio">输入学号即可登录，进入个人主页，上传自己的作品。</div>
         </div>
         <div class="card">
           <div class="who-row"><div class="avatar">管</div><div><div class="name">管理后台</div><div class="no">Admin</div></div></div>
-          <div class="bio">管理员可管理学生资料、上传与审核诗歌，维护班级诗页。</div>
+          <div class="bio">管理员可管理学生信息、审批作品、上传内容，维护班级网站。</div>
         </div>
       </div>
 
       <div class="between mt24">
-        <h3 style="font-family: var(--serif); color: var(--indigo-dk); margin:0;">最近诗歌</h3>
-        <a class="btn btn-ghost2" href="students.html">查看全部同学 →</a>
+        <h3 style="font-family: var(--serif); color: var(--indigo-dk); margin:0;">最近作品</h3>
+        <a class="btn btn-ghost2" href="gallery.html">查看全部作品 →</a>
       </div>
-      <div class="poems mt16" id="recentPoems"></div>
+      <div class="content-grid mt16" id="recentContents"></div>
     </div>
   </section>
 
@@ -65,28 +65,36 @@
       SZX.mountNav("home");
       SZX.mountFooter();
 
-      SZX.loadShared().then(function () {
-      // 统计诗歌数
-      var poems = SZX.getPoems();
-      document.getElementById("statPoems").textContent = poems.length;
+      SZX.loadAll().then(function () {
+        var poems = SZX.getPoems();
+        var contents = SZX.getContents();
+        document.getElementById("statPoems").textContent = poems.length;
+        document.getElementById("statContents").textContent = contents.length;
 
-      // 最近诗歌（取最新 3 条）
-      var recent = poems.slice().sort(function (a, b) {
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      }).slice(0, 3);
-      var box = document.getElementById("recentPoems");
-      if (recent.length === 0) {
-        box.innerHTML = '<div class="empty"><div class="big">诗歌将在未来上传</div><div>请管理员登录后，为同学们添加诗作。</div>' +
-          '<div class="mt16"><a class="btn btn-primary" href="admin.html">进入管理后台</a></div></div>';
-      } else {
-        box.innerHTML = recent.map(function (p) {
-          return '<div class="poem"><div class="pmeta">' + SZX.escapeHtml(p.author) +
-            ' · 学号 ' + SZX.escapeHtml(p.studentNo) + ' · ' + SZX.fmtDate(p.createdAt) + '</div>' +
-            '<div class="ptitle">' + SZX.escapeHtml(p.title) + '</div>' +
-            '<div class="pbody">' + SZX.escapeHtml(p.content.slice(0, 120)) + (p.content.length > 120 ? '…' : '') + '</div>' +
-            '<div class="mt8"><a class="btn btn-ghost2" href="student.html?no=' + encodeURIComponent(p.studentNo) + '">查看个人页 →</a></div></div>';
-        }).join("");
-      }
+        // 最近作品（取最新 6 条）
+        var recent = SZX.getRecentContents(6);
+        var box = document.getElementById("recentContents");
+        if (recent.length === 0) {
+          box.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><div class="icon">📷</div>' +
+            '<div class="title">作品将在未来上传</div>' +
+            '<div>请同学们登录后上传自己的作品。</div>' +
+            '<div class="mt16"><a class="btn btn-primary" href="login.html">学生登录</a></div></div>';
+        } else {
+          box.innerHTML = recent.map(function (c) {
+            var preview = "";
+            if (c.type === "image" && c.filePath) {
+              preview = '<img class="cc-img" src="' + SZX.escapeHtml(c.filePath) + '" alt="" />';
+            } else if (c.type === "word") {
+              preview = '<div class="cc-img" style="display:flex;align-items:center;justify-content:center;background:#eef2fa;"><span style="font-size:36px;">📄</span></div>';
+            } else {
+              preview = '<div class="cc-img" style="display:flex;align-items:center;justify-content:center;background:#e9f6ee;padding:12px;">' +
+                '<span style="font-size:13px;color:var(--ink-soft);overflow:hidden;">' + SZX.escapeHtml((c.content || "").slice(0, 80)) + '…</span></div>';
+            }
+            return '<a class="content-card" href="student.html?no=' + encodeURIComponent(c.studentNo) + '" style="text-decoration:none;color:inherit;">' +
+              preview + '<div class="cc-body"><div class="cc-title">' + SZX.escapeHtml(c.title) + '</div>' +
+              '<div class="cc-meta">' + SZX.escapeHtml(c.authorName) + ' · ' + SZX.fmtDate(c.createdAt) + '</div></div></a>';
+          }).join("");
+        }
       });
     });
   </script>

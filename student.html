@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>个人诗页 · 尚志中学 2024 届 09 班</title>
+  <title>个人主页 · 尚志中学 2024 届 09 班</title>
   <link rel="stylesheet" href="assets/css/style.css" />
 </head>
 <body>
@@ -21,52 +21,191 @@
       SZX.mountNav("students");
       SZX.mountFooter();
 
-      SZX.loadShared().then(function () {
-      var params = new URLSearchParams(location.search);
-      var no = params.get("no") || "";
-      var s = SZX.getStudent(no);
-      var root = document.getElementById("root");
+      SZX.loadAll().then(function () {
+        var params = new URLSearchParams(location.search);
+        var no = params.get("no") || (SZX.isStudent() ? SZX.currentStudentNo() : "");
+        var s = SZX.getStudent(no);
+        var root = document.getElementById("root");
 
-      if (!s) {
-        root.innerHTML = '<div class="panel center"><h2>未找到该同学</h2><p class="lead">学号不正确或不存在。</p>' +
-          '<a class="btn btn-primary" href="students.html">返回同学名录</a></div>';
-        return;
-      }
+        if (!s) {
+          root.innerHTML = '<div class="panel center"><h2>未找到该同学</h2><p class="lead">学号不正确或不存在。</p>' +
+            '<a class="btn btn-primary" href="students.html">返回同学名录</a></div>';
+          return;
+        }
 
-      var initials = s.name.replace("学生", "");
-      var poems = SZX.getPoemsByStudent(no);
-      var isOwner = SZX.isStudent() && SZX.currentStudentNo() === no;
-      var isAdmin = SZX.isAdmin();
+        var isOwner = SZX.isStudent() && SZX.currentStudentNo() === no;
+        var isAdmin = SZX.isAdmin();
+        var initials = s.name.charAt(s.name.length > 1 ? s.name.length - 2 : 0) + (s.name.length > 1 ? s.name.charAt(s.name.length - 1) : "");
+        if (s.name.length === 1) initials = s.name;
+        var poems = SZX.getPoemsByStudent(no);
 
-      var head = '<div class="profile-head">' +
-        '<div class="avatar-lg">' + SZX.escapeHtml(initials) + '</div>' +
-        '<div><div class="pno">学号 ' + SZX.escapeHtml(s.studentNo) + '</div>' +
-        '<h2 class="pname">' + SZX.escapeHtml(s.name) + '</h2>' +
-        '<div class="pbio">' + SZX.escapeHtml(s.bio) + '</div></div></div>';
+        var head = '<div class="profile-head">' +
+          '<div class="avatar-lg">' + SZX.escapeHtml(initials) + '</div>' +
+          '<div><div class="pno">学号 ' + SZX.escapeHtml(s.studentNo) + '</div>' +
+          '<h2 class="pname">' + SZX.escapeHtml(s.name) + '</h2>' +
+          '<div class="pbio">' + SZX.escapeHtml(s.bio) + '</div></div></div>';
 
-      var actions = (isOwner || isAdmin)
-        ? '<div class="between mt16"><div></div>' +
-          (isAdmin
-            ? '<a class="btn btn-gold" href="admin.html?no=' + encodeURIComponent(no) + '#add">为该同学添加诗歌</a>'
-            : '<span class="muted">你是本人，可联系管理员上传你的诗。</span>') +
-          '</div>'
-        : '';
+        // 上传区域（本人或管理员可见）
+        var uploadSection = "";
+        if (isOwner || isAdmin) {
+          uploadSection = '<div class="panel wide mt24">' +
+            '<h2 style="font-family:var(--serif);color:var(--indigo-dk);">' + (isOwner ? '上传我的作品' : '为该同学上传') + '</h2>' +
+            '<p class="lead">' + (isOwner ? '你可以上传图片、文字或 Word 文档。学生上传的内容需管理员审批后发布。' : '管理员上传将直接发布。') + '</p>' +
+            '<div id="uploadMsg"></div>' +
+            '<div class="field"><label>标题</label><input class="input" id="upTitle" placeholder="给作品起个标题" /></div>' +
+            '<div class="row" style="align-items:flex-start;">' +
+            '<div class="field" style="flex:1;"><label>类型</label>' +
+            '<select class="input" id="upType"><option value="text">文字</option><option value="image">图片</option><option value="word">Word 文档</option></select></div>' +
+            (isAdmin ? '<div class="field" style="flex:1;"><label>选择同学</label>' +
+            '<select class="input" id="upStudent"><option value="">—不指定—</option>' +
+            SZX.getAllStudents().map(function (stu) {
+              return '<option value="' + SZX.escapeHtml(stu.studentNo) + '"' + (stu.studentNo === no ? ' selected' : '') + '>' + SZX.escapeHtml(stu.name) + '</option>';
+            }).join("") + '</select></div>' : '') +
+            '</div>' +
+            '<div class="field" id="textArea"><label>文字内容</label>' +
+            '<textarea class="textarea" id="upContent" placeholder="输入文字内容…" style="min-height:120px;"></textarea></div>' +
+            '<div class="field" id="fileArea" style="display:none;"><label>选择文件</label>' +
+            '<input type="file" class="input" id="upFile" accept="image/*,image/jpeg,image/png,image/gif,image/webp,.doc,.docx" />' +
+            '<div class="hint">支持 JPG/PNG/GIF/WebP 图片，DOC/DOCX Word 文档，最大 20MB</div></div>' +
+            '<div class="row" style="justify-content:flex-end;padding-top:8px;">' +
+            '<button class="btn btn-primary" id="btnUpload">上传作品</button></div>' +
+            '</div>';
+        }
 
-      var body;
-      if (poems.length === 0) {
-        body = '<div class="empty"><div class="big">诗歌将在未来上传</div>' +
-          '<div>这位同学的诗作尚未收录。' + (isOwner ? '可联系管理员上传你的诗。' : '') + '</div></div>';
-      } else {
-        body = '<div class="poems">' + poems.map(function (p) {
-          return '<div class="poem"><div class="pmeta">' + SZX.escapeHtml(p.author) +
-            ' · ' + SZX.fmtDate(p.createdAt) + ' · <span class="tag ' + p.status + '">' +
-            (p.status === "published" ? "已发布" : "草稿") + '</span></div>' +
-            '<div class="ptitle">' + SZX.escapeHtml(p.title) + '</div>' +
-            '<div class="pbody">' + SZX.escapeHtml(p.content) + '</div></div>';
-        }).join("") + '</div>';
-      }
+        // 我的作品列表
+        var contentSection = "";
+        if (isOwner || isAdmin) {
+          contentSection = '<div class="mt24 between"><h3 style="font-family:var(--serif);margin:0;color:var(--indigo-dk);">我的作品</h3></div>' +
+            '<div class="mt16" id="myContents"></div>';
+        }
 
-      root.innerHTML = head + actions + body;
+        // 诗歌列表
+        var poemSection;
+        if (poems.length === 0) {
+          poemSection = '<div class="empty mt24"><div class="big">诗歌将在未来上传</div>' +
+            '<div>这位同学的诗作尚未收录。</div></div>';
+        } else {
+          poemSection = '<div class="mt24 between"><h3 style="font-family:var(--serif);margin:0;color:var(--indigo-dk);">诗歌作品</h3></div>' +
+            '<div class="poems mt16">' + poems.map(function (p) {
+              return '<div class="poem"><div class="pmeta">' + SZX.escapeHtml(p.author) +
+                ' · ' + SZX.fmtDate(p.createdAt) + '</div>' +
+                '<div class="ptitle">' + SZX.escapeHtml(p.title) + '</div>' +
+                '<div class="pbody">' + SZX.escapeHtml(p.content) + '</div></div>';
+            }).join("") + '</div>';
+        }
+
+        root.innerHTML = head + uploadSection + contentSection + poemSection;
+
+        // 加载该学生的内容
+        function loadMyContents() {
+          if (!isOwner && !isAdmin) return;
+          var box = document.getElementById("myContents");
+          if (!box) return;
+          SZX.api.GET("/api/contents/student/" + encodeURIComponent(no)).then(function (r) {
+            if (!r.ok || r.contents.length === 0) {
+              box.innerHTML = '<div class="empty"><div class="big">暂无作品</div><div>' + (isOwner ? '使用上方表单上传你的第一个作品。' : '') + '</div></div>';
+              return;
+            }
+            box.innerHTML = '<div class="content-grid">' + r.contents.map(function (c) {
+              var preview = "";
+              if (c.type === "image" && c.filePath) {
+                preview = '<img class="cc-img" src="' + SZX.escapeHtml(c.filePath) + '" alt="" />';
+              } else if (c.type === "word") {
+                preview = '<div class="cc-img" style="display:flex;align-items:center;justify-content:center;"><span style="font-size:36px;">📄</span></div>';
+              } else {
+                preview = '<div class="cc-body"><div class="cc-content">' + SZX.escapeHtml((c.content || "").slice(0, 120)) + '</div></div>';
+              }
+              var statusBadge = '<span class="badge-status ' + SZX.statusClass(c.status) + '">' + SZX.statusLabel(c.status) + '</span>';
+              if (c.status === "rejected" && c.rejectReason) {
+                statusBadge += ' <span class="muted" style="font-size:12px;">原因：' + SZX.escapeHtml(c.rejectReason) + '</span>';
+              }
+              var delBtn = (isOwner || isAdmin) ? '<button class="btn btn-danger" data-del="' + c.id + '">删除</button>' : '';
+              return '<div class="content-card">' + preview +
+                '<div class="cc-body"><div class="cc-title">' + SZX.escapeHtml(c.title) + '</div>' +
+                '<div class="cc-meta">' + statusBadge + ' · ' + SZX.fmtDate(c.createdAt) + '</div></div>' +
+                '<div class="cc-actions">' + delBtn + '</div></div>';
+            }).join("") + '</div>';
+
+            // 删除事件
+            box.querySelectorAll("[data-del]").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                if (!confirm("确定删除这个作品？")) return;
+                SZX.deleteContent(btn.getAttribute("data-del")).then(function () {
+                  loadMyContents();
+                  showToast("作品已删除", "success");
+                });
+              });
+            });
+          });
+        }
+        loadMyContents();
+
+        // 上传逻辑
+        var upType = document.getElementById("upType");
+        var textArea = document.getElementById("textArea");
+        var fileArea = document.getElementById("fileArea");
+        if (upType) {
+          upType.addEventListener("change", function () {
+            textArea.style.display = this.value === "text" ? "" : "none";
+            fileArea.style.display = this.value === "text" ? "none" : "";
+          });
+        }
+
+        var btnUpload = document.getElementById("btnUpload");
+        if (btnUpload) {
+          btnUpload.addEventListener("click", function () {
+            var title = document.getElementById("upTitle").value.trim();
+            var type = document.getElementById("upType").value;
+            var msg = document.getElementById("uploadMsg");
+            if (!title) { msg.innerHTML = '<div class="msg error">请输入标题</div>'; return; }
+
+            var fd = new FormData();
+            fd.append("title", title);
+            fd.append("type", type);
+
+            if (isAdmin) {
+              var sel = document.getElementById("upStudent");
+              if (sel && sel.value) fd.append("studentNo", sel.value);
+            }
+
+            if (type === "text") {
+              var content = document.getElementById("upContent").value.trim();
+              if (!content) { msg.innerHTML = '<div class="msg error">请输入文字内容</div>'; return; }
+              fd.append("content", content);
+            } else {
+              var fileInput = document.getElementById("upFile");
+              if (!fileInput.files[0]) { msg.innerHTML = '<div class="msg error">请选择文件</div>'; return; }
+              fd.append("file", fileInput.files[0]);
+            }
+
+            msg.innerHTML = '<div class="msg info">正在上传…</div>';
+            btnUpload.disabled = true;
+
+            SZX.uploadContent(fd).then(function (r) {
+              btnUpload.disabled = false;
+              if (r.ok) {
+                msg.innerHTML = '<div class="msg ok">' + SZX.escapeHtml(r.msg) + '</div>';
+                document.getElementById("upTitle").value = "";
+                document.getElementById("upContent").value = "";
+                document.getElementById("upFile").value = "";
+                loadMyContents();
+              } else {
+                msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml(r.msg || "上传失败") + '</div>';
+              }
+            }).catch(function () {
+              btnUpload.disabled = false;
+              msg.innerHTML = '<div class="msg error">上传失败，请重试</div>';
+            });
+          });
+        }
+
+        function showToast(text, type) {
+          var t = document.createElement("div");
+          t.className = "toast " + (type || "info");
+          t.textContent = text;
+          document.body.appendChild(t);
+          setTimeout(function () { t.remove(); }, 3000);
+        }
       });
     });
   </script>

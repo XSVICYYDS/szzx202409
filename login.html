@@ -11,17 +11,16 @@
 
   <section class="section-tight">
     <div class="wrap">
-      <div class="panel" id="box">
+      <div class="panel" style="max-width:420px;margin:0 auto;">
         <h2>学生登录</h2>
-        <p class="lead">输入你的学号即可登录，进入个人诗页。</p>
+        <p class="lead">输入学号即可登录，进入个人主页。</p>
         <div id="msg"></div>
         <div class="field">
-          <label for="no">学号</label>
-          <input class="input" id="no" inputmode="numeric" placeholder="例如：202409001" autocomplete="off" />
-          <div class="hint">学号范围：202409001 — 202409048</div>
+          <label>学号</label>
+          <input class="input" id="no" placeholder="202409001 — 202409048" autocomplete="off" />
         </div>
         <button class="btn btn-primary" id="btn" style="width:100%;">登录</button>
-        <p class="hint center mt16">提示：本站为静态站点，登录仅用于识别身份，无密码保护。</p>
+        <p class="hint center mt16">登录后可上传图片、文字或 Word 文档作品，等待管理员审批后发布。</p>
       </div>
     </div>
   </section>
@@ -33,33 +32,30 @@
     document.addEventListener("DOMContentLoaded", function () {
       SZX.mountNav("login");
       SZX.mountFooter();
+      SZX.loadAll();
 
       var msg = document.getElementById("msg");
-      var input = document.getElementById("no");
       var btn = document.getElementById("btn");
 
-      // 已登录则提示
-      if (SZX.isStudent()) {
-        msg.innerHTML = '<div class="msg info">你已登录（学号 ' + SZX.escapeHtml(SZX.currentStudentNo()) +
-          '）。<a href="student.html?no=' + encodeURIComponent(SZX.currentStudentNo()) + '">进入我的诗页 →</a> · <a href="#" id="lo">退出</a></div>';
-        var lo = document.getElementById("lo");
-        if (lo) lo.addEventListener("click", function (e) { e.preventDefault(); SZX.logout(); location.reload(); });
-      }
+      btn.addEventListener("click", function () {
+        var no = document.getElementById("no").value.trim();
+        if (!no) { msg.innerHTML = '<div class="msg error">请输入学号</div>'; return; }
+        btn.disabled = true;
+        btn.textContent = "登录中…";
+        SZX.loginStudent(no).then(function (r) {
+          btn.disabled = false;
+          btn.textContent = "登录";
+          if (r.ok) {
+            location.href = "student.html?no=" + encodeURIComponent(no);
+          } else {
+            msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml(r.msg) + '</div>';
+          }
+        });
+      });
 
-      function doLogin() {
-        var no = input.value.trim();
-        var r = SZX.loginStudent(no);
-        if (r.ok) {
-          msg.innerHTML = '<div class="msg ok">登录成功！即将进入个人诗页…</div>';
-          setTimeout(function () { location.href = "student.html?no=" + encodeURIComponent(no); }, 600);
-        } else {
-          msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml(r.msg) + '</div>';
-          input.focus();
-        }
-      }
-
-      btn.addEventListener("click", doLogin);
-      input.addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+      document.getElementById("no").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") btn.click();
+      });
     });
   </script>
 </body>

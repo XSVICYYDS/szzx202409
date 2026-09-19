@@ -14,15 +14,15 @@
       <div class="section-head">
         <div class="eyebrow">Roster</div>
         <h2>同学名录</h2>
-        <p>班级共 48 位同学。点击任意同学，进入其个人诗页。</p>
+        <p>班级共 48 位同学。点击任意同学，进入其个人主页。</p>
       </div>
 
       <div class="toolbar">
-        <input class="input grow" id="search" placeholder="搜索姓名或学号（如 学生01 或 202409001）" />
+        <input class="input grow" id="search" placeholder="搜索姓名或学号" />
         <select class="input" id="filter" style="max-width:200px;">
           <option value="all">全部同学</option>
-          <option value="has">有诗歌</option>
-          <option value="none">暂无诗歌</option>
+          <option value="has">有作品</option>
+          <option value="none">暂无作品</option>
         </select>
       </div>
 
@@ -38,42 +38,39 @@
       SZX.mountNav("students");
       SZX.mountFooter();
 
-      SZX.loadShared().then(function () {
-      var poems = SZX.getPoems();
-      var poemCount = {};
-      poems.forEach(function (p) { poemCount[p.studentNo] = (poemCount[p.studentNo] || 0) + 1; });
+      SZX.loadAll().then(function () {
+        var students = SZX.getAllStudents();
 
-      function render() {
-        var kw = (document.getElementById("search").value || "").trim().toLowerCase();
-        var f = document.getElementById("filter").value;
-        var all = SZX.getAllStudents();
-        var list = all.filter(function (s) {
-          if (kw && s.name.toLowerCase().indexOf(kw) === -1 && s.studentNo.indexOf(kw) === -1) return false;
-          var c = poemCount[s.studentNo] || 0;
-          if (f === "has" && c === 0) return false;
-          if (f === "none" && c > 0) return false;
-          return true;
-        });
-        var box = document.getElementById("list");
-        if (list.length === 0) {
-          box.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div class="big">没有匹配的同学</div></div>';
-          return;
+        function render() {
+          var kw = (document.getElementById("search").value || "").trim().toLowerCase();
+          var f = document.getElementById("filter").value;
+          var list = students.filter(function (s) {
+            if (kw && s.name.toLowerCase().indexOf(kw) === -1 && s.studentNo.indexOf(kw) === -1) return false;
+            var total = (s.poemCount || 0) + (s.contentCount || 0);
+            if (f === "has" && total === 0) return false;
+            if (f === "none" && total > 0) return false;
+            return true;
+          });
+          var box = document.getElementById("list");
+          if (list.length === 0) {
+            box.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div class="big">没有匹配的同学</div></div>';
+            return;
+          }
+          box.innerHTML = list.map(function (s) {
+            var initials = s.name.length >= 2 ? s.name.slice(-2) : s.name;
+            var total = (s.poemCount || 0) + (s.contentCount || 0);
+            return '<a class="card" href="student.html?no=' + encodeURIComponent(s.studentNo) + '">' +
+              '<div class="who-row"><div class="avatar">' + SZX.escapeHtml(initials) + '</div>' +
+              '<div><div class="name">' + SZX.escapeHtml(s.name) + '</div><div class="no">学号 ' + SZX.escapeHtml(s.studentNo) + '</div></div></div>' +
+              '<div class="bio">' + SZX.escapeHtml(s.bio) + '</div>' +
+              '<span class="badge ' + (total > 0 ? "has" : "") + '">' + (total > 0 ? total + ' 个作品' : '暂无作品') + '</span>' +
+              '</a>';
+          }).join("");
         }
-        box.innerHTML = list.map(function (s) {
-          var c = poemCount[s.studentNo] || 0;
-          var initials = s.name.replace("学生", "");
-          return '<a class="card" href="student.html?no=' + encodeURIComponent(s.studentNo) + '">' +
-            '<div class="who-row"><div class="avatar">' + SZX.escapeHtml(initials) + '</div>' +
-            '<div><div class="name">' + SZX.escapeHtml(s.name) + '</div><div class="no">学号 ' + SZX.escapeHtml(s.studentNo) + '</div></div></div>' +
-            '<div class="bio">' + SZX.escapeHtml(s.bio) + '</div>' +
-            '<span class="badge ' + (c > 0 ? "has" : "") + '">' + (c > 0 ? c + ' 首诗' : '暂无诗歌') + '</span>' +
-            '</a>';
-        }).join("");
-      }
 
-      document.getElementById("search").addEventListener("input", render);
-      document.getElementById("filter").addEventListener("change", render);
-      render();
+        document.getElementById("search").addEventListener("input", render);
+        document.getElementById("filter").addEventListener("change", render);
+        render();
       });
     });
   </script>

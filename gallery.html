@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>班级作品 · 尚志中学 2024 届 09 班</title>
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <div id="nav"></div>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Gallery</div>
+        <h2>班级作品</h2>
+        <p>这里展示同学们与管理员上传并已发布的全部作品，包含图片、文字与 Word 文档。</p>
+      </div>
+
+      <div class="filter-bar">
+        <select class="input" id="typeFilter">
+          <option value="all">全部</option>
+          <option value="image">图片</option>
+          <option value="text">文字</option>
+          <option value="word">Word文档</option>
+        </select>
+        <select class="input" id="stuFilter">
+          <option value="all">全部同学</option>
+        </select>
+        <input class="input" id="search" placeholder="搜索标题或作者" style="flex:1 1 240px;max-width:320px;" />
+      </div>
+
+      <div class="content-grid" id="grid"></div>
+    </div>
+  </section>
+
+  <div id="footer"></div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      SZX.mountNav("gallery");
+      SZX.mountFooter();
+
+      SZX.loadAll().then(function () {
+        /* 填充同学筛选下拉 */
+        var stuSel = document.getElementById("stuFilter");
+        SZX.getAllStudents().forEach(function (s) {
+          var opt = document.createElement("option");
+          opt.value = s.studentNo;
+          opt.textContent = s.name + "（" + s.studentNo + "）";
+          stuSel.appendChild(opt);
+        });
+
+        var TYPE_LABEL = { image: "图片", text: "文字", word: "Word文档" };
+        var TYPE_STYLE = {
+          image: "background:#e8f5fb;color:#1c6b93;",
+          text:  "background:#e9f6ee;color:#2f7d52;",
+          word:  "background:#eef2fa;color:#1f3a5f;"
+        };
+
+        function authorLink(c) {
+          return '<a href="student.html?no=' + encodeURIComponent(c.studentNo) + '">' +
+            SZX.escapeHtml(c.authorName || "—") + '</a>';
+        }
+
+        function typeBadge(c) {
+          return '<span class="badge-status" style="' + (TYPE_STYLE[c.type] || "") + '">' +
+            SZX.escapeHtml(TYPE_LABEL[c.type] || c.type) + '</span>';
+        }
+
+        function card(c) {
+          var meta = '<div class="cc-meta">' + authorLink(c) +
+            ' · 学号 ' + SZX.escapeHtml(c.studentNo) +
+            ' · ' + SZX.fmtDate(c.createdAt) + ' · ' + typeBadge(c) + '</div>';
+
+          var media = "";
+          if (c.type === "image" && c.filePath) {
+            media = '<img class="cc-img" src="' + SZX.escapeHtml(c.filePath) +
+              '" alt="' + SZX.escapeHtml(c.title) + '" />';
+          } else if (c.type === "word") {
+            media = '<div style="display:flex;align-items:center;justify-content:center;' +
+              'height:200px;background:#f0ede5;">' +
+              '<a href="' + SZX.escapeHtml(c.filePath || "#") +
+              '" download="' + SZX.escapeHtml(c.originalFilename || "") + '" title="下载文件">' +
+              '<div class="file-icon word">📄</div></a></div>';
+          }
+
+          var body = "";
+          if (c.type === "text" && c.content) {
+            body = '<div class="cc-content">' + SZX.escapeHtml(c.content) + '</div>';
+          }
+
+          var actions = '<div class="cc-actions">';
+          if (c.type === "word" && c.filePath) {
+            actions += '<a class="btn btn-ghost2" href="' + SZX.escapeHtml(c.filePath) +
+              '" download="' + SZX.escapeHtml(c.originalFilename || "") + '">下载文件</a>';
+          }
+          actions += '<a class="btn btn-ghost2" href="student.html?no=' +
+            encodeURIComponent(c.studentNo) + '">查看作者</a>';
+          actions += '</div>';
+
+          return '<div class="content-card">' + media +
+            '<div class="cc-body">' +
+            '<div class="cc-title">' + SZX.escapeHtml(c.title) + '</div>' +
+            meta + body + '</div>' + actions + '</div>';
+        }
+
+        function render() {
+          var t = document.getElementById("typeFilter").value;
+          var s = document.getElementById("stuFilter").value;
+          var kw = (document.getElementById("search").value || "").trim().toLowerCase();
+
+          var list = SZX.getContents().filter(function (c) {
+            if (t !== "all" && c.type !== t) return false;
+            if (s !== "all" && c.studentNo !== s) return false;
+            if (kw) {
+              var title = (c.title || "").toLowerCase();
+              var author = (c.authorName || "").toLowerCase();
+              if (title.indexOf(kw) === -1 && author.indexOf(kw) === -1) return false;
+            }
+            return true;
+          });
+
+          var box = document.getElementById("grid");
+          if (list.length === 0) {
+            box.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">' +
+              '<div class="icon">📭</div>' +
+              '<div class="title">暂无作品</div>' +
+              '<div>还没有符合条件的已发布内容。</div></div>';
+            return;
+          }
+          box.innerHTML = list.map(card).join("");
+        }
+
+        document.getElementById("typeFilter").addEventListener("change", render);
+        document.getElementById("stuFilter").addEventListener("change", render);
+        document.getElementById("search").addEventListener("input", render);
+        render();
+      });
+    });
+  </script>
+</body>
+</html>
