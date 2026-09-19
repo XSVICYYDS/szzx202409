@@ -38,6 +38,50 @@
     };
   });
 
+  /* ---------- 课程表数据（来自尚志中学909班课程表_完整版.xlsx，夏令时） ---------- */
+  var SCHEDULE = {
+    title: "尚志中学909班课程表（完整版·夏令时）",
+    days: ["星期一", "星期二", "星期三", "星期四", "星期五"],
+    rows: [
+      { period: "早读",     time: "7:30-7:50",   subs: ["英语","语文","英语","语文","英语"] },
+      { period: "第一节",   time: "8:00-8:40",   subs: ["语文","历史","科学","语文","英语"] },
+      { period: "第二节",   time: "9:10-9:50",   subs: ["数学","英语","数学","科学","科学"] },
+      { period: "第三节",   time: "10:05-10:45", subs: ["科学","数学","英语","道德与法治","语文"] },
+      { period: "第四节",   time: "11:00-11:40", subs: ["英语","语文","美术","数学","体育与健康"] },
+      { period: "午间小课", time: "12:20-12:40", subs: ["数学","科学","英语","道德与法治","数学"] },
+      { period: "第五节",   time: "13:15-13:55", subs: ["道德与法治","劳动","语文","音乐","数学"] },
+      { period: "第六节",   time: "14:10-14:50", subs: ["体育与健康","科学","地理","校本（口语）","历史"] },
+      { period: "第七节",   time: "15:05-15:45", subs: ["综合实践2","体育与健康","综合实践1","校本（阅读）","班队（心理）"] },
+      { period: "作业整理", time: "15:50-16:30", subs: ["英语","数学","科学","科学","语文"] },
+      { period: "晚自习",   time: "18:00-20:10", subs: ["体育与健康","道德与法治","音乐","数学","英语"] }
+    ],
+    saturday: "周六上午：8:00-8:40 第一节 · 8:50-9:30 第二节 · 9:40-10:20 第三节 · 10:30-11:10 第四节",
+    note: "课程表仅供参考，以实际课程为准。"
+  };
+
+  // 科目配色（柔和色块，便于快速定位）
+  var SUBJECT_COLORS = {
+    "语文":     { bg: "#fdf1e8", fg: "#b15a00" },
+    "数学":     { bg: "#eef2fa", fg: "#1f3a5f" },
+    "英语":     { bg: "#e9f6ee", fg: "#2f7d52" },
+    "科学":     { bg: "#f3edfb", fg: "#6a3da6" },
+    "历史":     { bg: "#fbe6e1", fg: "#a0421f" },
+    "地理":     { bg: "#e4f3ef", fg: "#1f6f5a" },
+    "道德与法治": { bg: "#fbeef4", fg: "#9b2a5c" },
+    "体育与健康": { bg: "#e8f5fb", fg: "#1c6b93" },
+    "音乐":     { bg: "#f5ecff", fg: "#7a44b8" },
+    "美术":     { bg: "#fff0f5", fg: "#b23a6b" },
+    "劳动":     { bg: "#f0f7e8", fg: "#4a7a2a" },
+    "综合实践1": { bg: "#eef6f7", fg: "#2a6f7a" },
+    "综合实践2": { bg: "#f5f0e6", fg: "#7a5a2a" },
+    "校本（口语）": { bg: "#eaf2fb", fg: "#2a5a7a" },
+    "校本（阅读）": { bg: "#f2ecfb", fg: "#5a2a7a" },
+    "班队（心理）": { bg: "#fbeceb", fg: "#9a3a3a" }
+  };
+  function getSubjectColor(subject) {
+    return SUBJECT_COLORS[subject] || { bg: "#f1ece0", fg: "#5b6675" };
+  }
+
   /* ---------- 工具 ---------- */
   function read(key, fallback) {
     try { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
@@ -180,6 +224,7 @@
     var links = [
       { href: "index.html", t: "首页", a: "home" },
       { href: "students.html", t: "同学名录", a: "students" },
+      { href: "schedule.html", t: "课程表", a: "schedule" },
       { href: "login.html", t: "学生登录", a: "login" },
       { href: "admin.html", t: "管理后台", a: "admin" }
     ];
@@ -213,7 +258,7 @@
   /* ---------- 导出 ---------- */
   global.SZX = {
     CLASS_NAME: CLASS_NAME, TOTAL: TOTAL, ADMIN_USERNAME: ADMIN.username,
-    STUDENTS: STUDENTS,
+    STUDENTS: STUDENTS, SCHEDULE: SCHEDULE, getSubjectColor: getSubjectColor,
     loadShared: loadShared, sharedReady: sharedReady,
     getAllStudents: getAllStudents, getStudent: getStudent, setStudentProfile: setStudentProfile,
     getPoems: getPoems, getPoemsByStudent: getPoemsByStudent, getPoem: getPoem,
