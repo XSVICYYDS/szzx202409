@@ -202,6 +202,9 @@
     setSession(null);
     return Promise.resolve({ ok: true });
   }
+  function setAdminSession() {
+    setSession({ role: "admin", username: "github" });
+  }
   function getSessionUser() { return cache.session; }
   function isAdmin() { return cache.session && cache.session.role === "admin"; }
   function isStudent() { return cache.session && cache.session.role === "student"; }
@@ -241,16 +244,22 @@
     var url = GH_API + "/repos/" + CONFIG.repo + "/contents/" + path + "?ref=" + CONFIG.branch;
     return fetch(url, { headers: { "Authorization": "token " + getToken(), "Accept": "application/vnd.github+json" } })
       .then(function (r) {
-        if (!r.ok) throw new Error("GitHub API " + r.status);
+        if (r.status === 404) return null; // 文件不存在
+        if (!r.ok) {
+          return r.json().then(function (j) {
+            throw new Error("获取文件失败 (" + r.status + "): " + (j.message || r.statusText));
+          }, function () {
+            throw new Error("获取文件失败 (" + r.status + ")");
+          });
+        }
         return r.json();
       });
   }
 
   function putFile(path, content, message) {
     return getFile(path).then(function (file) {
-      return _put(path, content, message, file.sha);
-    }).catch(function () {
-      return _put(path, content, message, null);
+      var sha = (file && file.sha) || null;
+      return _put(path, content, message, sha);
     });
   }
 
@@ -284,6 +293,66 @@
   }
   function savePoems() {
     return putFile("data/poems.json", JSON.stringify(cache.poems, null, 2), "更新诗歌数据");
+  }
+
+  /* ---------- GitHub OAuth Device Flow（静态站点无需后端回调）---------- */
+  function getOAuthClientId() {
+    return (cache.config && cache.config.oauthClientId) || CONFIG.oauthClientId || "";
+  }
+
+  function startDeviceFlow() {
+    var clientId = getOAuthClientId();
+    if (!clientId) {
+      return Promise.reject(new Error("未配置 OAuth Client ID，请先在 config.json 中设置 oauthClientId"));
+    }
+    return fetch("https://github.com/login/device/code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ client_id: clientId, scope: "repo" })
+    }).then(function (r) {
+      if (!r.ok) throw new Error("启动设备流程失败 (" + r.status + ")");
+      return r.json();
+    });
+  }
+
+  function pollForToken(deviceCode, interval, expiresIn) {
+    var clientId = getOAuthClientId();
+    var startTime = Date.now();
+    var timeoutMs = (expiresIn || 900) * 1000;
+
+    return new Promise(function (resolve, reject) {
+      function poll() {
+        if (Date.now() - startTime > timeoutMs) {
+          reject(new Error("登录超时，请重试"));
+          return;
+        }
+        fetch("https://github.com/login/oauth/access_token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            client_id: clientId,
+            device_code: deviceCode,
+            grant_type: "urn:ietf:params:oauth:grant-type:device_code"
+          })
+        }).then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.access_token) {
+              resolve(data.access_token);
+            } else if (data.error === "authorization_pending") {
+              setTimeout(poll, (interval || 5) * 1000);
+            } else if (data.error === "slow_down") {
+              setTimeout(poll, (interval ? interval + 5 : 10) * 1000);
+            } else if (data.error === "expired_token") {
+              reject(new Error("验证码已过期，请重试"));
+            } else if (data.error === "access_denied") {
+              reject(new Error("用户拒绝了授权"));
+            } else {
+              reject(new Error(data.error_description || data.error || "授权失败"));
+            }
+          }).catch(function (e) { reject(e); });
+      }
+      poll();
+    });
   }
 
   /* ---------- 内容上传（GitHub 提交）---------- */
@@ -577,9 +646,11 @@
     getContents: getContents, getAllContents: getAllContents,
     getContentsByStudent: getContentsByStudent, getPendingContents: getPendingContents,
     getRecentContents: getRecentContents,
-    loginStudent: loginStudent, loginAdmin: loginAdmin, logout: logout,
+    loginStudent: loginStudent, loginAdmin: loginAdmin, logout: logout, setAdminSession: setAdminSession,
     getSession: getSessionUser, isStudent: isStudent, isAdmin: isAdmin, currentStudentNo: currentStudentNo,
     getToken: getToken, setToken: setToken, isLocked: isLocked,
+    getOAuthClientId: getOAuthClientId, startDeviceFlow: startDeviceFlow, pollForToken: pollForToken,
+    putFile: putFile,
     updateStudent: updateStudent, addStudent: addStudent, deleteStudent: deleteStudent,
     addPoem: addPoem, updatePoem: updatePoem, deletePoem: deletePoem,
     uploadContent: uploadContent,

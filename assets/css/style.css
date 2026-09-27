@@ -441,6 +441,20 @@ a:hover { color: var(--gold); }
   font-size: 26px; cursor: pointer; color: var(--muted); }
 .modal-close:hover { color: var(--ink); }
 
+/* ---------- 分隔线 ---------- */
+.divider { display: flex; align-items: center; text-align: center; color: var(--muted); font-size: 13px; }
+.divider::before, .divider::after { content: ""; flex: 1; border-bottom: 1px solid var(--line); }
+.divider span { padding: 0 12px; }
+
+/* ---------- GitHub 设备授权验证码 ---------- */
+.device-code {
+  font-size: 32px; font-weight: 800; letter-spacing: 6px; font-family: "Courier New", monospace;
+  background: linear-gradient(135deg, var(--indigo), var(--indigo-dk));
+  color: #fff; padding: 16px 24px; border-radius: 12px; display: inline-block;
+  user-select: all; cursor: pointer; box-shadow: var(--shadow-sm);
+}
+.device-code:hover { filter: brightness(1.1); }
+
 /* ---------- 学生主页统计 ---------- */
 .pstats { margin-top: 10px; display: flex; gap: 14px; }
 .pstat { background: rgba(255,255,255,0.18); padding: 3px 12px; border-radius: 999px; font-size: 13px; color: #fff; }
