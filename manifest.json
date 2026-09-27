@@ -1,0 +1,12 @@
+{
+  "name": "尚志中学 2024 届 09 班",
+  "short_name": "09班官网",
+  "description": "尚志中学 2024 届 09 班班级官方网站",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f6f3ec",
+  "theme_color": "#1f3a5f",
+  "icons": [
+    { "src": "assets/img/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

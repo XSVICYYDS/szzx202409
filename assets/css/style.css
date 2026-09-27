@@ -364,6 +364,93 @@ a:hover { color: var(--gold); }
 .stat-card .num { font-size: 32px; font-weight: 700; color: var(--indigo-dk); font-family: var(--serif); }
 .stat-card .lbl { font-size: 13px; color: var(--muted); margin-top: 4px; }
 
+/* ===================================================================
+   v3 新增样式 — 启动页/瀑布流/课程表新特性/登录头像/图标按钮
+   =================================================================== */
+
+/* ---------- 启动加载动画 ---------- */
+.splash { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, var(--indigo), var(--indigo-dk)); transition: opacity .4s ease; }
+.splash-inner { text-align: center; color: #fff; }
+.splash-logo { width: 80px; height: 80px; border-radius: 20px; margin: 0 auto 18px;
+  display: grid; place-items: center; font-size: 36px; font-weight: 800; color: #fff;
+  background: rgba(255,255,255,0.14); box-shadow: inset 0 0 0 3px rgba(216,178,94,0.6);
+  animation: pulse 1.6s ease-in-out infinite; }
+.splash-slogan { font-family: var(--serif); font-size: 18px; letter-spacing: 2px; opacity: 0.9; margin-bottom: 18px; }
+.splash-dots { display: flex; gap: 8px; justify-content: center; }
+.splash-dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--gold-soft); animation: bounce 1.4s ease-in-out infinite; }
+.splash-dots span:nth-child(2) { animation-delay: .2s; }
+.splash-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes bounce { 0%,80%,100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-10px); opacity: 1; } }
+
+/* ---------- 登录头像区 ---------- */
+.login-head { text-align: center; margin-bottom: 18px; }
+.login-avatar { width: 64px; height: 64px; border-radius: 18px; margin: 0 auto 12px;
+  display: grid; place-items: center; font-size: 32px;
+  background: linear-gradient(135deg, rgba(184,137,58,0.15), rgba(31,58,95,0.1)); }
+.login-head h2 { margin: 0 0 4px; font-family: var(--serif); color: var(--indigo-dk); }
+
+/* ---------- 加载旋转 ---------- */
+.loading { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- 消息提示 ---------- */
+.msg { padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 12px; }
+.msg.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.msg.ok { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.msg.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+/* ---------- 瀑布流 ---------- */
+.masonry { column-count: 3; column-gap: 20px; }
+.masonry-item { break-inside: avoid; margin-bottom: 20px; }
+@media (max-width: 900px) { .masonry { column-count: 2; } }
+@media (max-width: 560px) { .masonry { column-count: 1; } }
+
+/* ---------- 图标按钮（点赞/收藏）---------- */
+.btn-icon { padding: 6px 10px; font-size: 15px; border-radius: 8px; border: 1px solid var(--line);
+  background: #fff; cursor: pointer; transition: all .2s; }
+.btn-icon:hover { border-color: var(--gold); }
+.btn-icon.liked { background: #fde8e8; border-color: #f3b4b4; }
+.btn-icon.faved { background: #fff8e1; border-color: #ffe082; }
+.like-count { font-size: 13px; color: var(--ink-soft); }
+
+/* ---------- 课程表新特性 ---------- */
+.sched-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.sched-day-label { font-weight: 700; color: var(--indigo-dk); font-size: 16px; min-width: 100px; text-align: center; }
+.sched th.day-active { background: linear-gradient(135deg, var(--gold), var(--gold-soft)); color: var(--indigo-dk); }
+.sched td.cell-active { background: rgba(216, 178, 94, 0.12); }
+.sched tr.row-current td { background: rgba(47, 125, 82, 0.08) !important; }
+.sched tr.row-next td { background: rgba(177, 90, 0, 0.06) !important; }
+.now-tag, .next-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; margin-left: 6px; font-weight: 600; }
+.now-tag { background: #d4edda; color: #155724; }
+.next-tag { background: #fff3cd; color: #856404; }
+.now-card { background: linear-gradient(135deg, rgba(47,125,82,0.1), rgba(47,125,82,0.04));
+  border: 1px solid #c3e6cb; border-radius: 12px; padding: 14px 20px; font-size: 15px; color: var(--ink); }
+.now-card.next { background: linear-gradient(135deg, rgba(177,90,0,0.1), rgba(177,90,0,0.04)); border-color: #ffe0b2; }
+.now-icon { margin-right: 8px; }
+
+/* ---------- 模态弹窗 ---------- */
+.modal { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.5);
+  align-items: center; justify-content: center; padding: 20px; }
+.modal-content { background: #fff; border-radius: 16px; padding: 28px; max-width: 400px; width: 100%;
+  position: relative; box-shadow: var(--shadow); animation: pop .25s ease; }
+@keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-close { position: absolute; top: 10px; right: 14px; background: none; border: none;
+  font-size: 26px; cursor: pointer; color: var(--muted); }
+.modal-close:hover { color: var(--ink); }
+
+/* ---------- 学生主页统计 ---------- */
+.pstats { margin-top: 10px; display: flex; gap: 14px; }
+.pstat { background: rgba(255,255,255,0.18); padding: 3px 12px; border-radius: 999px; font-size: 13px; color: #fff; }
+
+/* ---------- 内容卡片悬停 ---------- */
+.content-card { transition: transform .2s, box-shadow .2s; }
+.content-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+.content-card .cc-img { transition: transform .3s; }
+.content-card:hover .cc-img { transform: scale(1.03); }
+
 /* ---------- 响应式补充 ---------- */
 @media (max-width: 760px) {
   .content-grid { grid-template-columns: 1fr; }
@@ -371,4 +458,6 @@ a:hover { color: var(--gold); }
   .approval-thumb { width: 100%; height: 160px; }
   .stu-table { font-size: 12px; }
   .stu-table th, .stu-table td { padding: 6px 8px; }
+  .sched-controls .btn { padding: 8px 12px; font-size: 13px; }
+  .sched-day-label { font-size: 14px; min-width: 72px; }
 }

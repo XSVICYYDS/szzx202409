@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>同学名录 · 尚志中学 2024 届 09 班</title>
   <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
 </head>
 <body>
+  <div id="splash" class="splash"><div class="splash-inner"><div class="splash-logo">09</div><div class="splash-slogan">四十八位少年，以作品为记</div><div class="splash-dots"><span></span><span></span><span></span></div></div></div>
   <div id="nav"></div>
 
   <section class="section">
@@ -14,12 +16,12 @@
       <div class="section-head">
         <div class="eyebrow">Roster</div>
         <h2>同学名录</h2>
-        <p>班级共 48 位同学。点击任意同学，进入其个人主页。</p>
+        <p>班级共 <span id="totalCount">48</span> 位同学。点击任意同学，进入其个人主页，查看诗作与作品。</p>
       </div>
 
       <div class="toolbar">
-        <input class="input grow" id="search" placeholder="搜索姓名或学号" />
-        <select class="input" id="filter" style="max-width:200px;">
+        <input class="input grow" id="search" placeholder="搜索姓名 / 学号 / 入学年份（如 2024）" />
+        <select class="input" id="filter" style="max-width:180px;">
           <option value="all">全部同学</option>
           <option value="has">有作品</option>
           <option value="none">暂无作品</option>
@@ -35,35 +37,45 @@
   <script src="assets/js/app.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
+      SZX.showSplash();
       SZX.mountNav("students");
       SZX.mountFooter();
 
       SZX.loadAll().then(function () {
         var students = SZX.getAllStudents();
+        document.getElementById("totalCount").textContent = students.length;
 
         function render() {
           var kw = (document.getElementById("search").value || "").trim().toLowerCase();
           var f = document.getElementById("filter").value;
           var list = students.filter(function (s) {
-            if (kw && s.name.toLowerCase().indexOf(kw) === -1 && s.studentNo.indexOf(kw) === -1) return false;
-            var total = (s.poemCount || 0) + (s.contentCount || 0);
+            if (kw) {
+              var name = s.name.toLowerCase();
+              var no = s.studentNo.toLowerCase();
+              var year = (s.studentNo || "").slice(0, 4);
+              if (name.indexOf(kw) === -1 && no.indexOf(kw) === -1 && year.indexOf(kw) === -1) return false;
+            }
+            var total = SZX.poemCount(s.studentNo) + SZX.contentCount(s.studentNo);
             if (f === "has" && total === 0) return false;
             if (f === "none" && total > 0) return false;
             return true;
           });
           var box = document.getElementById("list");
           if (list.length === 0) {
-            box.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div class="big">没有匹配的同学</div></div>';
+            box.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div class="big">没有匹配的同学</div><div>试试其他关键词或筛选条件。</div></div>';
             return;
           }
           box.innerHTML = list.map(function (s) {
             var initials = s.name.length >= 2 ? s.name.slice(-2) : s.name;
-            var total = (s.poemCount || 0) + (s.contentCount || 0);
+            var total = SZX.poemCount(s.studentNo) + SZX.contentCount(s.studentNo);
+            var works = [];
+            if (SZX.poemCount(s.studentNo) > 0) works.push(SZX.poemCount(s.studentNo) + ' 诗');
+            if (SZX.contentCount(s.studentNo) > 0) works.push(SZX.contentCount(s.studentNo) + ' 作品');
             return '<a class="card" href="student.html?no=' + encodeURIComponent(s.studentNo) + '">' +
               '<div class="who-row"><div class="avatar">' + SZX.escapeHtml(initials) + '</div>' +
               '<div><div class="name">' + SZX.escapeHtml(s.name) + '</div><div class="no">学号 ' + SZX.escapeHtml(s.studentNo) + '</div></div></div>' +
               '<div class="bio">' + SZX.escapeHtml(s.bio) + '</div>' +
-              '<span class="badge ' + (total > 0 ? "has" : "") + '">' + (total > 0 ? total + ' 个作品' : '暂无作品') + '</span>' +
+              '<span class="badge ' + (total > 0 ? "has" : "") + '">' + (works.length > 0 ? works.join(' · ') : '暂无作品') + '</span>' +
               '</a>';
           }).join("");
         }

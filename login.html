@@ -5,19 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>学生登录 · 尚志中学 2024 届 09 班</title>
   <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="apple-touch-icon" href="assets/img/favicon.svg" />
 </head>
 <body>
+  <div id="splash" class="splash"><div class="splash-inner"><div class="splash-logo">09</div><div class="splash-slogan">四十八位少年，以作品为记</div><div class="splash-dots"><span></span><span></span><span></span></div></div></div>
   <div id="nav"></div>
 
   <section class="section-tight">
     <div class="wrap">
-      <div class="panel" style="max-width:420px;margin:0 auto;">
-        <h2>学生登录</h2>
-        <p class="lead">输入学号即可登录，进入个人主页。</p>
+      <div class="panel" style="max-width:440px;margin:0 auto;">
+        <div class="login-head">
+          <div class="login-avatar">🎓</div>
+          <h2>学生登录</h2>
+          <p class="lead">输入学号即可登录，进入个人主页。</p>
+        </div>
         <div id="msg"></div>
         <div class="field">
           <label>学号</label>
-          <input class="input" id="no" placeholder="202409001 — 202409048" autocomplete="off" />
+          <input class="input" id="no" placeholder="202409001 — 202409048" autocomplete="off" maxlength="12" />
+          <div class="hint" id="noHint">学号格式：202409 + 三位序号</div>
         </div>
         <button class="btn btn-primary" id="btn" style="width:100%;">登录</button>
         <p class="hint center mt16">登录后可上传图片、文字或 Word 文档作品，等待管理员审批后发布。</p>
@@ -30,32 +37,69 @@
   <script src="assets/js/app.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
+      SZX.showSplash();
       SZX.mountNav("login");
       SZX.mountFooter();
-      SZX.loadAll();
 
       var msg = document.getElementById("msg");
       var btn = document.getElementById("btn");
+      var noInput = document.getElementById("no");
+      var noHint = document.getElementById("noHint");
 
-      btn.addEventListener("click", function () {
-        var no = document.getElementById("no").value.trim();
+      // 实时格式校验
+      noInput.addEventListener("input", function () {
+        var v = this.value.trim();
+        if (v === "") { noHint.textContent = "学号格式：202409 + 三位序号"; noHint.style.color = ""; return; }
+        if (!/^\d+$/.test(v)) { noHint.textContent = "⚠ 学号只能包含数字"; noHint.style.color = "var(--accent)"; }
+        else if (v.length < 9) { noHint.textContent = "⚠ 学号长度不足（应为 10 位）"; noHint.style.color = "var(--warn)"; }
+        else if (v.length > 10) { noHint.textContent = "⚠ 学号长度过长（应为 10 位）"; noHint.style.color = "var(--warn)"; }
+        else if (!/^202409\d{3}$/.test(v)) { noHint.textContent = "⚠ 学号格式应为 202409XXX"; noHint.style.color = "var(--warn)"; }
+        else { noHint.textContent = "✓ 学号格式正确"; noHint.style.color = "var(--ok)"; }
+      });
+
+      function doLogin() {
+        var no = noInput.value.trim();
         if (!no) { msg.innerHTML = '<div class="msg error">请输入学号</div>'; return; }
+        if (!/^202409\d{3}$/.test(no)) { msg.innerHTML = '<div class="msg error">学号格式不正确，应为 202409 + 三位序号</div>'; return; }
+
         btn.disabled = true;
-        btn.textContent = "登录中…";
-        SZX.loginStudent(no).then(function (r) {
+        btn.innerHTML = '<span class="loading"></span> 登录中…';
+        msg.innerHTML = "";
+
+        // 超时保护
+        var timedOut = false;
+        var timer = setTimeout(function () {
+          timedOut = true;
           btn.disabled = false;
           btn.textContent = "登录";
-          if (r.ok) {
+          msg.innerHTML = '<div class="msg error">请求超时，请检查网络后重试</div>';
+        }, 10000);
+
+        SZX.loadAll().then(function () {
+          if (timedOut) return;
+          clearTimeout(timer);
+          return SZX.loginStudent(no);
+        }).then(function (r) {
+          if (timedOut) return;
+          btn.disabled = false;
+          btn.textContent = "登录";
+          if (r && r.ok) {
+            msg.innerHTML = '<div class="msg ok">登录成功，正在跳转…</div>';
             location.href = "student.html?no=" + encodeURIComponent(no);
           } else {
-            msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml(r.msg) + '</div>';
+            msg.innerHTML = '<div class="msg error">' + SZX.escapeHtml((r && r.msg) || "登录失败") + '</div>';
           }
+        }).catch(function () {
+          if (timedOut) return;
+          clearTimeout(timer);
+          btn.disabled = false;
+          btn.textContent = "登录";
+          msg.innerHTML = '<div class="msg error">网络异常，请刷新页面后重试</div>';
         });
-      });
+      }
 
-      document.getElementById("no").addEventListener("keydown", function (e) {
-        if (e.key === "Enter") btn.click();
-      });
+      btn.addEventListener("click", doLogin);
+      noInput.addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
     });
   </script>
 </body>
