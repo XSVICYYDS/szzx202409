@@ -1,0 +1,12 @@
+name = "szzx202409"
+compatibility_date = "2024-09-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "user_data"
+database_id = "60b0b55d-405f-4ddb-8296-b4a4ba210967"
+
+[vars]
+JWT_SECRET = "szzx202409-jwt-secret-2024"
+OPENROUTER_MODEL = "openrouter/free"

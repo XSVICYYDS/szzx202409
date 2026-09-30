@@ -1,7 +1,8 @@
 /* =====================================================================
-   尚志中学 2024 届 09 班班级官网 — 前端共享脚本 v3 (GitHub Pages 静态版)
-   数据：data/*.json (fetch 读取)
-   写操作：GitHub Contents API (管理员配置 Token，存 sessionStorage)
+   尚志中学 2024 届 09 班班级官网 — 前端共享脚本 v4 (Cloudflare Pages + D1)
+   数据：GET /api/data (D1 数据库)
+   写操作：POST/PUT/DELETE /api/* (JWT 鉴权)
+   AI 聊天：POST /api/ai/chat (OpenRouter)
    ===================================================================== */
 
 (function (global) {
@@ -9,25 +10,13 @@
 
   /* ---------- 配置 ---------- */
   var CONFIG = {
-    repo: "XSVICYYDS/szzx202409",
-    branch: "main",
-    basePath: "",   // GitHub Pages 子路径，如 /szzx202409，运行时自动检测
     className: "尚志中学 2024 届 09 班",
     totalStudents: 48,
-    slogan: "四十八位少年，以作品为记"
+    slogan: "四十八位少年，以作品为记",
+    apiBase: "/api"
   };
 
-  // 自动检测 basePath (GitHub Pages 子目录部署)
-  (function detectBasePath() {
-    var p = location.pathname;
-    var m = p.match(/^(\/[^/]+)/);
-    if (m && m[1] !== "/" && p !== "/index.html" && p !== "/") {
-      // 如果路径不是根，取第一级作为 basePath
-    }
-    // 统一从 config.json 读取
-  })();
-
-  /* ---------- 课程表数据（严格对照 Excel）---------- */
+  /* ---------- 课程表数据（fallback，API 返回时覆盖）---------- */
   var SCHEDULE = {
     title: "尚志中学909班课程表（完整版·夏令时）",
     days: ["星期一", "星期二", "星期三", "星期四", "星期五"],
@@ -67,52 +56,17 @@
   }
 
   /* ---------- basePath 处理 ---------- */
-  function bp(path) {
-    return (CONFIG.basePath || "") + path;
-  }
+  function bp(path) { return path; }
 
   /* ---------- 内存缓存 ---------- */
   var cache = {
-    students: [],
-    poems: [],
-    contents: [],
-    users: [],
-    config: {},
-    session: null,
-    loaded: false
+    students: [], poems: [], contents: [], config: {},
+    session: null, loaded: false
   };
-
-  /* ---------- 加载全部数据 ---------- */
-  function loadAll() {
-    // 使用相对路径，兼容 GitHub Pages 子目录部署（如 /szzx202409/）
-    return fetch("data/config.json").then(function (r) { return r.json(); }).catch(function () { return {}; })
-      .then(function (cfg) {
-        cache.config = cfg || {};
-        if (cfg.basePath) CONFIG.basePath = cfg.basePath;
-        if (cfg.className) CONFIG.className = cfg.className;
-        if (cfg.totalStudents) CONFIG.totalStudents = cfg.totalStudents;
-        if (cfg.slogan) CONFIG.slogan = cfg.slogan;
-        return Promise.all([
-          fetch("data/students.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
-          fetch("data/poems.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
-          fetch("data/contents.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
-          fetch("data/users.json").then(function (r) { return r.json(); }).catch(function () { return []; })
-        ]);
-      }).then(function (results) {
-        cache.students = results[0] || [];
-        cache.poems = results[1] || [];
-        cache.contents = results[2] || [];
-        cache.users = results[3] || [];
-        cache.session = getSession();
-        cache.loaded = true;
-        return cache;
-      });
-  }
 
   /* ---------- 会话管理 (sessionStorage) ---------- */
   var SESSION_KEY = "szzx_session";
-  var TOKEN_KEY = "szzx_gh_token";
-  var LOCK_KEY = "szzx_lock";
+  var TOKEN_KEY = "szzx_token";
 
   function getSession() {
     try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); }
@@ -129,77 +83,160 @@
     else sessionStorage.removeItem(TOKEN_KEY);
   }
 
-  /* ---------- 锁定机制（管理员密码错误超限）---------- */
-  function getLockInfo() {
-    try { return JSON.parse(localStorage.getItem(LOCK_KEY) || "null"); }
-    catch (e) { return null; }
+  /* ---------- API 调用 ---------- */
+  function api(path, options) {
+    options = options || {};
+    var token = getToken();
+    var headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+    if (options.headers) for (var k in options.headers) headers[k] = options.headers[k];
+    var opts = { method: options.method || "GET", headers: headers };
+    if (options.body) opts.body = options.body;
+    return fetch(CONFIG.apiBase + "/" + path, opts).then(function (r) {
+      return r.text().then(function (text) {
+        var data;
+        try { data = text ? JSON.parse(text) : {}; }
+        catch (e) { data = { error: "解析响应失败" }; }
+        if (!r.ok) throw new Error(data.error || "API错误 (" + r.status + ")");
+        return data;
+      });
+    });
   }
-  function isLocked() {
-    var info = getLockInfo();
-    if (!info) return false;
-    if (info.lockedUntil && new Date(info.lockedUntil) > new Date()) return true;
-    if (info.lockedUntil) { localStorage.removeItem(LOCK_KEY); return false; }
-    return false;
-  }
-  function recordFail() {
-    var info = getLockInfo() || { failCount: 0, lockedUntil: null };
-    info.failCount = (info.failCount || 0) + 1;
-    if (info.failCount >= 5) {
-      info.lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    }
-    localStorage.setItem(LOCK_KEY, JSON.stringify(info));
-  }
-  function clearLock() { localStorage.removeItem(LOCK_KEY); }
 
-  /* ---------- 密码哈希（浏览器端同步，不依赖 Web Crypto）---------- */
-  function hashPassword(pwd) {
-    var salt = "szzx202409-salt";
-    return Promise.resolve(simpleHash(salt + pwd));
+  function apiUpload(path, formData) {
+    var token = getToken();
+    var headers = {};
+    if (token) headers["Authorization"] = "Bearer " + token;
+    return fetch(CONFIG.apiBase + "/" + path, {
+      method: "POST", headers: headers, body: formData
+    }).then(function (r) {
+      return r.json().then(function (data) {
+        if (!r.ok) throw new Error(data.error || "上传失败 (" + r.status + ")");
+        return data;
+      });
+    });
   }
-  function simpleHash(str) {
-    var h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-    for (var i = 0; i < str.length; i++) {
-      var ch = str.charCodeAt(i);
-      h1 = Math.imul(h1 ^ ch, 2654435761);
-      h2 = Math.imul(h2 ^ ch, 1597334677);
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0") +
-           (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
+
+  /* ---------- 数据转换（D1 snake_case → 前端 camelCase）---------- */
+  function tfStudent(s) {
+    return {
+      id: s.id, studentNo: s.student_no, name: s.name,
+      bio: s.bio || (s.name + " 同学，尚志中学 2024 届 09 班。"),
+      enrollmentYear: s.enrollment_year, avatar: s.avatar,
+      createdAt: s.created_at
+    };
+  }
+  function tfContent(c) {
+    return {
+      id: c.id, studentNo: c.student_no, type: c.type,
+      title: c.title || "", content: c.description || "",
+      description: c.description || "", fileUrl: c.file_url,
+      filePath: c.file_url, status: c.status,
+      reviewedBy: c.reviewed_by, reviewedAt: c.reviewed_at,
+      createdAt: c.created_at,
+      authorName: c.student_no
+    };
+  }
+  function tfPoem(p) {
+    return {
+      id: p.id, studentNo: p.student_no, title: p.title,
+      content: p.content, author: p.author, status: p.status,
+      createdAt: p.created_at
+    };
+  }
+
+  /* ---------- 加载全部数据 ---------- */
+  function loadAll() {
+    return api("data").then(function (data) {
+      cache.config = data.config || {};
+      cache.students = (data.students || []).map(tfStudent);
+      cache.poems = (data.poems || []).map(tfPoem);
+      cache.contents = (data.contents || []).map(tfContent);
+      if (data.schedule) SCHEDULE = data.schedule;
+      if (cache.config.className) CONFIG.className = cache.config.className;
+      if (cache.config.totalStudents) CONFIG.totalStudents = parseInt(cache.config.totalStudents);
+      if (cache.config.slogan) CONFIG.slogan = cache.config.slogan;
+      cache.session = getSession();
+      cache.loaded = true;
+      return cache;
+    }).catch(function () {
+      // API 不可用时 fallback 到 JSON 文件
+      return loadFromJSON();
+    });
+  }
+
+  function loadFromJSON() {
+    return fetch("data/config.json").then(function (r) { return r.json(); }).catch(function () { return {}; })
+      .then(function (cfg) {
+        cache.config = cfg || {};
+        if (cfg.className) CONFIG.className = cfg.className;
+        if (cfg.totalStudents) CONFIG.totalStudents = cfg.totalStudents;
+        if (cfg.slogan) CONFIG.slogan = cfg.slogan;
+        return Promise.all([
+          fetch("data/students.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
+          fetch("data/poems.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
+          fetch("data/contents.json").then(function (r) { return r.json(); }).catch(function () { return []; })
+        ]);
+      }).then(function (results) {
+        cache.students = results[0] || [];
+        cache.poems = results[1] || [];
+        cache.contents = results[2] || [];
+        cache.session = getSession();
+        cache.loaded = true;
+        return cache;
+      });
+  }
+
+  /* ---------- 加载全部内容（含待审批，管理后台用）---------- */
+  function loadAllContents() {
+    return api("contents").then(function (data) {
+      cache.contents = (data || []).map(tfContent);
+      return cache.contents;
+    }).catch(function () { return cache.contents; });
+  }
+  function loadAllPoems() {
+    return api("poems").then(function (data) {
+      cache.poems = (data || []).map(tfPoem);
+      return cache.poems;
+    }).catch(function () { return cache.poems; });
   }
 
   /* ---------- 认证 ---------- */
   function loginStudent(studentNo) {
-    var s = cache.students.find(function (x) { return x.studentNo === studentNo; });
-    if (!s) return Promise.resolve({ ok: false, msg: "学号不存在，请检查后重试" });
-    setSession({ role: "student", studentNo: s.studentNo, name: s.name });
-    return Promise.resolve({ ok: true, student: { studentNo: s.studentNo, name: s.name, bio: s.bio } });
+    if (!studentNo || !/^\d{9}$/.test(studentNo)) {
+      return Promise.resolve({ ok: false, msg: "学号格式错误，请输入 9 位数字学号" });
+    }
+    return api("login", {
+      method: "POST",
+      body: JSON.stringify({ studentNo: studentNo })
+    }).then(function (data) {
+      setToken(data.token);
+      setSession({ role: "student", studentNo: data.studentNo, name: data.name });
+      return { ok: true, student: { studentNo: data.studentNo, name: data.name } };
+    }).catch(function (e) {
+      return { ok: false, msg: e.message || "学号不存在" };
+    });
   }
 
   function loginAdmin(username, password) {
-    if (isLocked()) {
-      var info = getLockInfo();
-      var left = Math.ceil((new Date(info.lockedUntil) - new Date()) / 60000);
-      return Promise.resolve({ ok: false, msg: "密码错误次数过多，已锁定 " + left + " 分钟，请稍后再试" });
+    if (!username || !password) {
+      return Promise.resolve({ ok: false, msg: "请输入账号和密码" });
     }
-    var u = cache.users.find(function (x) { return x.username === username });
-    if (!u) { recordFail(); return Promise.resolve({ ok: false, msg: "管理员账号不存在" }); }
-    return hashPassword(password).then(function (hash) {
-      // 兼容：存储的可能是 bcrypt hash 或 SHA-256 hash
-      // 这里对比 SHA-256 hash；如果是 bcrypt hash 则提示用户重新设置
-      if (u.passwordHash === hash) {
-        clearLock();
-        setSession({ role: "admin", username: u.username });
-        return { ok: true };
-      }
-      recordFail();
-      return { ok: false, msg: "管理员账号或密码错误" };
+    return api("login", {
+      method: "POST",
+      body: JSON.stringify({ username: username, password: password })
+    }).then(function (data) {
+      setToken(data.token);
+      setSession({ role: "admin", username: data.name });
+      return { ok: true };
+    }).catch(function (e) {
+      return { ok: false, msg: e.message || "登录失败" };
     });
   }
 
   function logout() {
     setSession(null);
+    setToken(null);
     return Promise.resolve({ ok: true });
   }
   function setAdminSession() {
@@ -209,6 +246,7 @@
   function isAdmin() { return cache.session && cache.session.role === "admin"; }
   function isStudent() { return cache.session && cache.session.role === "student"; }
   function currentStudentNo() { return cache.session && cache.session.role === "student" ? cache.session.studentNo : null; }
+  function isLocked() { return false; }
 
   /* ---------- 学生数据 ---------- */
   function getAllStudents() { return cache.students; }
@@ -237,234 +275,92 @@
     }).slice(0, n || 6);
   }
 
-  /* ---------- GitHub Contents API（写操作）---------- */
-  var GH_API = "https://api.github.com";
-
-  function getFile(path) {
-    var url = GH_API + "/repos/" + CONFIG.repo + "/contents/" + path + "?ref=" + CONFIG.branch;
-    return fetch(url, { headers: { "Authorization": "token " + getToken(), "Accept": "application/vnd.github+json" } })
-      .then(function (r) {
-        if (r.status === 404) return null; // 文件不存在
-        if (!r.ok) {
-          return r.json().then(function (j) {
-            throw new Error("获取文件失败 (" + r.status + "): " + (j.message || r.statusText));
-          }, function () {
-            throw new Error("获取文件失败 (" + r.status + ")");
-          });
-        }
-        return r.json();
-      });
-  }
-
-  function putFile(path, content, message) {
-    return getFile(path).then(function (file) {
-      var sha = (file && file.sha) || null;
-      return _put(path, content, message, sha);
-    });
-  }
-
-  function _put(path, content, message, sha) {
-    var url = GH_API + "/repos/" + CONFIG.repo + "/contents/" + path;
-    var body = {
-      message: message || "update " + path,
-      content: btoa(unescape(encodeURIComponent(content))),
-      branch: CONFIG.branch
-    };
-    if (sha) body.sha = sha;
-    return fetch(url, {
-      method: "PUT",
-      headers: {
-        "Authorization": "token " + getToken(),
-        "Accept": "application/vnd.github+json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      if (!r.ok) return r.json().then(function (j) { throw new Error(j.message || "GitHub API 错误"); });
-      return r.json();
-    });
-  }
-
-  function saveContents() {
-    return putFile("data/contents.json", JSON.stringify(cache.contents, null, 2), "更新作品数据");
-  }
-  function saveStudents() {
-    return putFile("data/students.json", JSON.stringify(cache.students, null, 2), "更新学生数据");
-  }
-  function savePoems() {
-    return putFile("data/poems.json", JSON.stringify(cache.poems, null, 2), "更新诗歌数据");
-  }
-
-  /* ---------- GitHub OAuth Device Flow（静态站点无需后端回调）---------- */
-  function getOAuthClientId() {
-    return (cache.config && cache.config.oauthClientId) || CONFIG.oauthClientId || "";
-  }
-
-  function startDeviceFlow() {
-    var clientId = getOAuthClientId();
-    if (!clientId) {
-      return Promise.reject(new Error("未配置 OAuth Client ID，请先在 config.json 中设置 oauthClientId"));
-    }
-    return fetch("https://github.com/login/device/code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ client_id: clientId, scope: "repo" })
-    }).then(function (r) {
-      if (!r.ok) throw new Error("启动设备流程失败 (" + r.status + ")");
-      return r.json();
-    });
-  }
-
-  function pollForToken(deviceCode, interval, expiresIn) {
-    var clientId = getOAuthClientId();
-    var startTime = Date.now();
-    var timeoutMs = (expiresIn || 900) * 1000;
-
-    return new Promise(function (resolve, reject) {
-      function poll() {
-        if (Date.now() - startTime > timeoutMs) {
-          reject(new Error("登录超时，请重试"));
-          return;
-        }
-        fetch("https://github.com/login/oauth/access_token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
-          body: JSON.stringify({
-            client_id: clientId,
-            device_code: deviceCode,
-            grant_type: "urn:ietf:params:oauth:grant-type:device_code"
-          })
-        }).then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (data.access_token) {
-              resolve(data.access_token);
-            } else if (data.error === "authorization_pending") {
-              setTimeout(poll, (interval || 5) * 1000);
-            } else if (data.error === "slow_down") {
-              setTimeout(poll, (interval ? interval + 5 : 10) * 1000);
-            } else if (data.error === "expired_token") {
-              reject(new Error("验证码已过期，请重试"));
-            } else if (data.error === "access_denied") {
-              reject(new Error("用户拒绝了授权"));
-            } else {
-              reject(new Error(data.error_description || data.error || "授权失败"));
-            }
-          }).catch(function (e) { reject(e); });
-      }
-      poll();
-    });
-  }
-
-  /* ---------- 内容上传（GitHub 提交）---------- */
+  /* ---------- 内容上传 ---------- */
   function uploadContent(data) {
     if (!isAdmin() && !isStudent()) return Promise.resolve({ ok: false, msg: "请先登录" });
-    var token = getToken();
-    if (!token && !isAdmin()) {
-      // 学生上传需要管理员已配置 token；若没有，提示
-      return Promise.resolve({ ok: false, msg: "管理员尚未配置 GitHub Token，暂时无法上传作品" });
-    }
 
     var user = cache.session;
-    var studentNo, authorName;
-    if (user.role === "student") {
-      studentNo = user.studentNo;
-      var stu = getStudent(studentNo);
-      authorName = stu ? stu.name : "未知";
-    } else {
-      studentNo = data.studentNo || "admin";
-      var s2 = studentNo !== "admin" ? getStudent(studentNo) : null;
-      authorName = s2 ? s2.name : "管理员";
-    }
+    var studentNo = user.role === "student" ? user.studentNo : (data.studentNo || "admin");
     var status = user.role === "admin" ? "approved" : "pending";
 
-    var item = {
-      id: Date.now(),
-      type: data.type,
-      title: data.title,
-      content: data.content || null,
-      filePath: null,
-      originalFilename: data.originalFilename || null,
-      mimeType: data.mimeType || null,
-      fileSize: data.fileSize || null,
-      studentNo: studentNo,
-      authorName: authorName,
-      uploadedBy: user.role,
-      status: status,
-      rejectReason: null,
-      createdAt: new Date().toISOString(),
-      approvedAt: status === "approved" ? new Date().toISOString() : null,
-      approvedBy: status === "approved" ? (user.username || "admin") : null
-    };
-
-    function finish() {
-      cache.contents.push(item);
-      return saveContents().then(function () {
-        return { ok: true, msg: status === "approved" ? "内容已直接发布" : "内容已提交，等待管理员审批", id: item.id, status: status };
+    function createContentRecord(fileUrl) {
+      return api("contents", {
+        method: "POST",
+        body: JSON.stringify({
+          studentNo: studentNo,
+          type: data.type,
+          title: data.title || "",
+          description: data.content || data.description || "",
+          fileUrl: fileUrl || null
+        })
+      }).then(function (res) {
+        // 刷新缓存
+        return loadAllContents().then(function () {
+          return { ok: true, msg: status === "approved" ? "内容已直接发布" : "内容已提交，等待管理员审批", id: res.id, status: status };
+        });
+      }).catch(function (e) {
+        return { ok: false, msg: e.message || "提交失败" };
       });
     }
 
     if (data.type === "text") {
       if (!data.content) return Promise.resolve({ ok: false, msg: "文字内容不能为空" });
-      return finish();
+      return createContentRecord(null);
     }
 
-    // 图片 / Word：先提交文件到 uploads/
+    // 图片 / Word：通过 API 上传
     if (!data.fileContent) return Promise.resolve({ ok: false, msg: "请选择文件" });
-    var subDir = data.type === "image" ? "images" : "docs";
-    var ext = (data.originalFilename || "").split(".").pop() || "bin";
-    var fileName = Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "." + ext;
-    var filePath = "uploads/" + subDir + "/" + fileName;
 
-    var url = GH_API + "/repos/" + CONFIG.repo + "/contents/" + filePath;
-    var body = {
-      message: "上传作品: " + data.title,
-      content: data.fileContent, // base64
-      branch: CONFIG.branch
-    };
-    return fetch(url, {
-      method: "PUT",
-      headers: { "Authorization": "token " + token, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      if (!r.ok) throw new Error("文件上传失败");
-      item.filePath = filePath;
-      item.originalFilename = data.originalFilename;
-      item.mimeType = data.mimeType;
-      item.fileSize = data.fileSize;
-      return finish();
+    // data.fileContent 是 base64 字符串，需要转换为 Blob 再用 FormData
+    var byteChars = atob(data.fileContent);
+    var byteArray = new Uint8Array(byteChars.length);
+    for (var i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+    var blob = new Blob([byteArray], { type: data.mimeType || "application/octet-stream" });
+    var formData = new FormData();
+    formData.append("file", blob, data.originalFilename || "upload.bin");
+    formData.append("studentNo", studentNo);
+
+    return apiUpload("upload", formData).then(function (res) {
+      return createContentRecord(res.url);
+    }).catch(function (e) {
+      return { ok: false, msg: e.message || "文件上传失败" };
     });
   }
 
   /* ---------- 审批 ---------- */
   function approveContent(id) {
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
-    var c = cache.contents.find(function (x) { return String(x.id) === String(id); });
-    if (!c) return Promise.resolve({ ok: false, msg: "内容不存在" });
-    c.status = "approved";
-    c.approvedAt = new Date().toISOString();
-    c.approvedBy = cache.session.username;
-    c.rejectReason = null;
-    return saveContents().then(function () { return { ok: true, msg: "内容已审批通过" }; });
+    return api("contents", {
+      method: "PUT",
+      body: JSON.stringify({ id: String(id), status: "approved" })
+    }).then(function () {
+      var c = cache.contents.find(function (x) { return String(x.id) === String(id); });
+      if (c) { c.status = "approved"; c.reviewedBy = cache.session.username; }
+      return { ok: true, msg: "内容已审批通过" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
   function rejectContent(id, reason) {
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
-    var c = cache.contents.find(function (x) { return String(x.id) === String(id); });
-    if (!c) return Promise.resolve({ ok: false, msg: "内容不存在" });
-    c.status = "rejected";
-    c.rejectReason = reason || "未通过审批";
-    c.approvedAt = new Date().toISOString();
-    c.approvedBy = cache.session.username;
-    return saveContents().then(function () { return { ok: true, msg: "内容已拒绝" }; });
+    return api("contents", {
+      method: "PUT",
+      body: JSON.stringify({ id: String(id), status: "rejected" })
+    }).then(function () {
+      var c = cache.contents.find(function (x) { return String(x.id) === String(id); });
+      if (c) { c.status = "rejected"; c.reviewedBy = cache.session.username; }
+      return { ok: true, msg: "内容已拒绝" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
   function deleteContent(id) {
-    var idx = cache.contents.findIndex(function (c) { return String(c.id) === String(id); });
-    if (idx === -1) return Promise.resolve({ ok: false, msg: "内容不存在" });
-    var c = cache.contents[idx];
+    var c = cache.contents.find(function (x) { return String(x.id) === String(id); });
+    if (!c) return Promise.resolve({ ok: false, msg: "内容不存在" });
     var isAdm = isAdmin();
     var isOwner = isStudent() && currentStudentNo() === c.studentNo;
     if (!isAdm && !isOwner) return Promise.resolve({ ok: false, msg: "无权删除" });
-    cache.contents.splice(idx, 1);
-    return saveContents().then(function () { return { ok: true, msg: "内容已删除" }; });
+    return api("contents?id=" + encodeURIComponent(id), { method: "DELETE" }).then(function () {
+      var idx = cache.contents.findIndex(function (x) { return String(x.id) === String(id); });
+      if (idx !== -1) cache.contents.splice(idx, 1);
+      return { ok: true, msg: "内容已删除" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
 
   /* ---------- 学生管理 ---------- */
@@ -472,69 +368,103 @@
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
     var s = getStudent(no);
     if (!s) return Promise.resolve({ ok: false, msg: "学生不存在" });
-    if (patch.studentNo && patch.studentNo !== no) {
-      if (getStudent(patch.studentNo)) return Promise.resolve({ ok: false, msg: "学号已被使用" });
-      var oldNo = s.studentNo;
-      cache.contents.forEach(function (c) { if (c.studentNo === oldNo) c.studentNo = patch.studentNo; });
-      cache.poems.forEach(function (p) { if (p.studentNo === oldNo) p.studentNo = patch.studentNo; });
-      s.studentNo = patch.studentNo;
-    }
-    if (patch.name) s.name = patch.name;
-    if (patch.bio !== undefined) s.bio = patch.bio;
-    return saveStudents().then(function () {
-      return saveContents();
-    }).then(function () {
-      return savePoems();
-    }).then(function () { return { ok: true, msg: "学生信息已更新" }; });
+    var body = { id: s.id };
+    if (patch.studentNo) body.studentNo = patch.studentNo;
+    if (patch.name) body.name = patch.name;
+    if (patch.bio !== undefined) body.bio = patch.bio;
+    return api("students", { method: "PUT", body: JSON.stringify(body) }).then(function () {
+      if (patch.studentNo) { s.studentNo = patch.studentNo; }
+      if (patch.name) s.name = patch.name;
+      if (patch.bio !== undefined) s.bio = patch.bio;
+      return { ok: true, msg: "学生信息已更新" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
   function addStudent(data) {
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
     if (!data.studentNo || !data.name) return Promise.resolve({ ok: false, msg: "学号和姓名不能为空" });
-    if (getStudent(data.studentNo)) return Promise.resolve({ ok: false, msg: "学号已存在" });
-    cache.students.push({
-      studentNo: data.studentNo, name: data.name,
-      username: "szzx" + data.studentNo.slice(-4),
-      bio: data.bio || data.name + " 同学，尚志中学 2024 届 09 班。",
-      createdAt: new Date().toISOString()
-    });
-    return saveStudents().then(function () { return { ok: true, msg: "学生已添加" }; });
+    return api("students", {
+      method: "POST",
+      body: JSON.stringify({ studentNo: data.studentNo, name: data.name, bio: data.bio })
+    }).then(function () {
+      cache.students.push({
+        studentNo: data.studentNo, name: data.name,
+        bio: data.bio || data.name + " 同学，尚志中学 2024 届 09 班。",
+        createdAt: new Date().toISOString()
+      });
+      return { ok: true, msg: "学生已添加" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
   function deleteStudent(no) {
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
-    var idx = cache.students.findIndex(function (s) { return s.studentNo === no; });
-    if (idx === -1) return Promise.resolve({ ok: false, msg: "学生不存在" });
-    cache.students.splice(idx, 1);
-    return saveStudents().then(function () { return { ok: true, msg: "学生已删除" }; });
+    var s = getStudent(no);
+    if (!s) return Promise.resolve({ ok: false, msg: "学生不存在" });
+    return api("students?id=" + encodeURIComponent(s.id), { method: "DELETE" }).then(function () {
+      var idx = cache.students.findIndex(function (x) { return x.studentNo === no; });
+      if (idx !== -1) cache.students.splice(idx, 1);
+      return { ok: true, msg: "学生已删除" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
 
   /* ---------- 诗歌管理 ---------- */
   function addPoem(data) {
-    if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
-    var stu = getStudent(data.studentNo);
-    cache.poems.push({
-      id: "p" + Date.now(), studentNo: data.studentNo,
-      title: data.title || "未命名", content: data.content || "",
-      author: stu ? stu.name : "未知", status: data.status || "published",
-      createdAt: new Date().toISOString()
-    });
-    return savePoems().then(function () { return { ok: true, msg: "诗歌已添加" }; });
+    if (!isAdmin() && !isStudent()) return Promise.resolve({ ok: false, msg: "请先登录" });
+    return api("poems", {
+      method: "POST",
+      body: JSON.stringify({
+        studentNo: data.studentNo || (isStudent() ? currentStudentNo() : null),
+        title: data.title || "未命名",
+        content: data.content || "",
+        author: data.author || (cache.session ? cache.session.name : "未知"),
+        status: data.status || (isAdmin() ? "approved" : "pending")
+      })
+    }).then(function (res) {
+      cache.poems.push({
+        id: res.id, studentNo: data.studentNo || currentStudentNo(),
+        title: data.title || "未命名", content: data.content || "",
+        author: data.author || (cache.session ? cache.session.name : "未知"),
+        status: data.status || (isAdmin() ? "approved" : "pending"),
+        createdAt: new Date().toISOString()
+      });
+      return { ok: true, msg: "诗歌已添加" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
   function updatePoem(id, patch) {
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
     var p = cache.poems.find(function (x) { return String(x.id) === String(id); });
     if (!p) return Promise.resolve({ ok: false, msg: "诗歌不存在" });
-    if (patch.studentNo) { p.studentNo = patch.studentNo; var s = getStudent(patch.studentNo); if (s) p.author = s.name; }
-    if (patch.title) p.title = patch.title;
-    if (patch.content) p.content = patch.content;
-    if (patch.status) p.status = patch.status;
-    return savePoems().then(function () { return { ok: true, msg: "诗歌已更新" }; });
+    var body = { id: String(id) };
+    if (patch.studentNo) body.studentNo = patch.studentNo;
+    if (patch.title) body.title = patch.title;
+    if (patch.content) body.content = patch.content;
+    if (patch.status) body.status = patch.status;
+    return api("poems", { method: "PUT", body: JSON.stringify(body) }).then(function () {
+      if (patch.studentNo) { p.studentNo = patch.studentNo; var s = getStudent(patch.studentNo); if (s) p.author = s.name; }
+      if (patch.title) p.title = patch.title;
+      if (patch.content) p.content = patch.content;
+      if (patch.status) p.status = patch.status;
+      return { ok: true, msg: "诗歌已更新" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
   }
   function deletePoem(id) {
     if (!isAdmin()) return Promise.resolve({ ok: false, msg: "需要管理员权限" });
-    var idx = cache.poems.findIndex(function (p) { return String(p.id) === String(id); });
-    if (idx === -1) return Promise.resolve({ ok: false, msg: "诗歌不存在" });
-    cache.poems.splice(idx, 1);
-    return savePoems().then(function () { return { ok: true, msg: "诗歌已删除" }; });
+    return api("poems?id=" + encodeURIComponent(id), { method: "DELETE" }).then(function () {
+      var idx = cache.poems.findIndex(function (p) { return String(p.id) === String(id); });
+      if (idx !== -1) cache.poems.splice(idx, 1);
+      return { ok: true, msg: "诗歌已删除" };
+    }).catch(function (e) { return { ok: false, msg: e.message }; });
+  }
+
+  /* ---------- 密钥管理（管理员）---------- */
+  function saveSecrets(data) {
+    return api("secrets", {
+      method: "POST",
+      body: JSON.stringify(data)
+    }).then(function () { return { ok: true }; })
+      .catch(function (e) { return { ok: false, msg: e.message }; });
+  }
+  function checkSecrets() {
+    return api("secrets").then(function (data) { return data; })
+      .catch(function () { return { hasOpenrouterKey: false, hasGithubToken: false }; });
   }
 
   /* ---------- 工具 ---------- */
@@ -587,6 +517,7 @@
       { href: "students.html", t: "同学名录", a: "students" },
       { href: "gallery.html", t: "班级作品", a: "gallery" },
       { href: "schedule.html", t: "课程表", a: "schedule" },
+      { href: "ai.html", t: "AI 助手", a: "ai" },
       { href: "login.html", t: "学生登录", a: "login" },
       { href: "admin.html", t: "管理后台", a: "admin" }
     ];
@@ -632,14 +563,14 @@
     }
     if (document.readyState === "complete") hide();
     else window.addEventListener("load", hide);
-    setTimeout(hide, 3000); // 兜底
+    setTimeout(hide, 3000);
   }
 
   /* ---------- 导出 ---------- */
   global.SZX = {
     CONFIG: CONFIG,
     SCHEDULE: SCHEDULE, getSubjectColor: getSubjectColor,
-    loadAll: loadAll,
+    loadAll: loadAll, loadAllContents: loadAllContents, loadAllPoems: loadAllPoems,
     bp: bp,
     getAllStudents: getAllStudents, getStudent: getStudent,
     getPoems: getPoems, getPoemsByStudent: getPoemsByStudent,
@@ -649,12 +580,12 @@
     loginStudent: loginStudent, loginAdmin: loginAdmin, logout: logout, setAdminSession: setAdminSession,
     getSession: getSessionUser, isStudent: isStudent, isAdmin: isAdmin, currentStudentNo: currentStudentNo,
     getToken: getToken, setToken: setToken, isLocked: isLocked,
-    getOAuthClientId: getOAuthClientId, startDeviceFlow: startDeviceFlow, pollForToken: pollForToken,
-    putFile: putFile,
     updateStudent: updateStudent, addStudent: addStudent, deleteStudent: deleteStudent,
     addPoem: addPoem, updatePoem: updatePoem, deletePoem: deletePoem,
     uploadContent: uploadContent,
     approveContent: approveContent, rejectContent: rejectContent, deleteContent: deleteContent,
+    saveSecrets: saveSecrets, checkSecrets: checkSecrets,
+    api: api,
     contentCount: contentCount, poemCount: poemCount,
     escapeHtml: escapeHtml, fmtDate: fmtDate, fmtSize: fmtSize,
     statusLabel: statusLabel, statusClass: statusClass,

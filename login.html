@@ -25,8 +25,8 @@
         <div id="msg"></div>
         <div class="field">
           <label>学号</label>
-          <input class="input" id="no" placeholder="202409001 — 202409048" autocomplete="off" maxlength="12" />
-          <div class="hint" id="noHint">学号格式：202409 + 三位序号</div>
+          <input class="input" id="no" placeholder="请输入 9 位学号" autocomplete="off" maxlength="9" />
+          <div class="hint" id="noHint">学号格式：9 位数字</div>
         </div>
         <button class="btn btn-primary" id="btn" style="width:100%;">登录</button>
         <p class="hint center mt16">登录后可上传图片、文字或 Word 文档作品，等待管理员审批后发布。</p>
@@ -51,18 +51,17 @@
       // 实时格式校验
       noInput.addEventListener("input", function () {
         var v = this.value.trim();
-        if (v === "") { noHint.textContent = "学号格式：202409 + 三位序号"; noHint.style.color = ""; return; }
+        if (v === "") { noHint.textContent = "学号格式：9 位数字"; noHint.style.color = ""; return; }
         if (!/^\d+$/.test(v)) { noHint.textContent = "⚠ 学号只能包含数字"; noHint.style.color = "var(--accent)"; }
-        else if (v.length < 9) { noHint.textContent = "⚠ 学号长度不足（应为 10 位）"; noHint.style.color = "var(--warn)"; }
-        else if (v.length > 10) { noHint.textContent = "⚠ 学号长度过长（应为 10 位）"; noHint.style.color = "var(--warn)"; }
-        else if (!/^202409\d{3}$/.test(v)) { noHint.textContent = "⚠ 学号格式应为 202409XXX"; noHint.style.color = "var(--warn)"; }
+        else if (v.length < 9) { noHint.textContent = "⚠ 学号长度不足（应为 9 位）"; noHint.style.color = "var(--warn)"; }
+        else if (v.length > 9) { noHint.textContent = "⚠ 学号长度过长（应为 9 位）"; noHint.style.color = "var(--warn)"; }
         else { noHint.textContent = "✓ 学号格式正确"; noHint.style.color = "var(--ok)"; }
       });
 
       function doLogin() {
         var no = noInput.value.trim();
         if (!no) { msg.innerHTML = '<div class="msg error">请输入学号</div>'; return; }
-        if (!/^202409\d{3}$/.test(no)) { msg.innerHTML = '<div class="msg error">学号格式不正确，应为 202409 + 三位序号</div>'; return; }
+        if (!/^\d{9}$/.test(no)) { msg.innerHTML = '<div class="msg error">学号格式错误，请输入 9 位数字学号</div>'; return; }
 
         btn.disabled = true;
         btn.innerHTML = '<span class="loading"></span> 登录中…';
@@ -74,15 +73,12 @@
           timedOut = true;
           btn.disabled = false;
           btn.textContent = "登录";
-          msg.innerHTML = '<div class="msg error">请求超时，请检查网络后重试</div>';
+          msg.innerHTML = '<div class="msg error">网络超时，请检查网络后重试</div>';
         }, 10000);
 
-        SZX.loadAll().then(function () {
+        SZX.loginStudent(no).then(function (r) {
           if (timedOut) return;
           clearTimeout(timer);
-          return SZX.loginStudent(no);
-        }).then(function (r) {
-          if (timedOut) return;
           btn.disabled = false;
           btn.textContent = "登录";
           if (r && r.ok) {
