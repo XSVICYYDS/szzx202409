@@ -572,6 +572,7 @@ export async function onRequest(context) {
   if (route === 'login' && method === 'POST') return handleLogin(context);
   if (route === 'setup' && method === 'POST') return handleSetup(context);
   if (route === 'data' && method === 'GET') return handleData(context);
+  if (route === 'ai') return handleAI(context); // AI 聊天公开访问，前端做次数限制
 
   // 鉴权
   const auth = request.headers.get('Authorization');

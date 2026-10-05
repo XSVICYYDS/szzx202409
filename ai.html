@@ -213,6 +213,19 @@
       40% { transform: translateY(-5px); opacity: 1; }
     }
 
+    /* ---------- 使用次数提示 ---------- */
+    .usage-info { margin-top: 10px; }
+    .usage-tag {
+      display: inline-block;
+      padding: 5px 14px;
+      border-radius: 999px;
+      background: rgba(99,102,241,0.08);
+      color: var(--indigo-dk);
+      font-size: 13px;
+      border: 1px solid rgba(99,102,241,0.18);
+    }
+    .usage-tag strong { color: var(--gold); font-size: 15px; margin: 0 2px; }
+
     /* ---------- 移动端 ---------- */
     @media (max-width: 600px) {
       .chat-view { height: 72vh; }
@@ -247,20 +260,13 @@
       <div class="section-head">
         <div class="eyebrow">AI Tutor</div>
         <h2>AI 学习助手</h2>
-        <p>写一首青春的诗、解一道数学题、改一段作文——AI 助手陪你一起学习。登录后即可开始对话，记录在本次会话中保留。</p>
+        <p>写一首青春的诗、解一道数学题、改一段作文——AI 助手陪你一起学习。无需登录即可使用，每日限 50 次。</p>
+        <div id="usageInfo" class="usage-info"></div>
       </div>
 
       <div class="chat-app" id="chatApp">
-        <!-- 未登录视图 -->
-        <div class="chat-login" id="chatLogin" hidden>
-          <div class="login-avatar">🤖</div>
-          <h2>请先登录</h2>
-          <p class="lead">AI 学习助手需要登录后使用，登录后即可与助手对话。</p>
-          <a class="btn btn-primary" href="login.html">前往登录 →</a>
-        </div>
-
-        <!-- 聊天视图 -->
-        <div class="chat-view" id="chatView" hidden>
+        <!-- 聊天视图（无需登录） -->
+        <div class="chat-view" id="chatView">
           <div class="chat-messages" id="messages"></div>
           <div class="quick-questions" id="quickQuestions">
             <button class="qq-btn" data-q="帮我写一首关于青春的诗">帮我写一首关于青春的诗</button>
@@ -286,19 +292,21 @@
     (function () {
       "use strict";
 
-      var TOKEN_KEY = "szx_token";          // JWT token（与后端约定）
+      var TOKEN_KEY = "szzx_token";         // JWT token（与 app.js 一致）
       var HISTORY_KEY = "szx_ai_chat";      // 聊天记录
+      var USAGE_KEY = "szx_ai_usage";       // 使用次数（localStorage，每日重置）
+      var DAILY_LIMIT = 50;                 // 每日限制次数
       var API_URL = "/api/ai/chat";
 
       var messages = [];     // [{role:'user'|'assistant', content:string}]
       var sending = false;
 
-      var chatLogin = document.getElementById("chatLogin");
       var chatView = document.getElementById("chatView");
       var messagesEl = document.getElementById("messages");
       var inputEl = document.getElementById("chatInput");
       var sendBtn = document.getElementById("sendBtn");
       var quickEl = document.getElementById("quickQuestions");
+      var usageEl = document.getElementById("usageInfo");
 
       /* ---------- 启动动画 + 页脚 ---------- */
       document.addEventListener("DOMContentLoaded", function () {
@@ -308,29 +316,48 @@
       });
 
       function init() {
-        if (isLoggedIn()) {
-          showChat();
-        } else {
-          showLogin();
-        }
-        bindEvents();
-      }
-
-      function isLoggedIn() {
-        return !!sessionStorage.getItem(TOKEN_KEY);
-      }
-
-      function showLogin() {
-        chatLogin.hidden = false;
-        chatView.hidden = true;
-      }
-
-      function showChat() {
-        chatLogin.hidden = true;
-        chatView.hidden = false;
         loadHistory();
         renderMessages();
+        renderUsage();
+        bindEvents();
         inputEl.focus();
+      }
+
+      /* ---------- 每日使用次数（localStorage，每日 0 点重置）---------- */
+      function today() {
+        var d = new Date();
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+      function getUsage() {
+        var raw = null;
+        try { raw = JSON.parse(localStorage.getItem(USAGE_KEY) || "null"); } catch (e) { raw = null; }
+        if (!raw || raw.date !== today()) {
+          raw = { date: today(), count: 0 };
+          localStorage.setItem(USAGE_KEY, JSON.stringify(raw));
+        }
+        return raw;
+      }
+      function incrementUsage() {
+        var u = getUsage();
+        u.count += 1;
+        localStorage.setItem(USAGE_KEY, JSON.stringify(u));
+        return u;
+      }
+      function remaining() {
+        var u = getUsage();
+        return Math.max(0, DAILY_LIMIT - u.count);
+      }
+      function renderUsage() {
+        var u = getUsage();
+        var left = DAILY_LIMIT - u.count;
+        if (usageEl) {
+          usageEl.innerHTML = '<span class="usage-tag">今日剩余 <strong>' + Math.max(0, left) + '</strong> / ' + DAILY_LIMIT + ' 次</span>';
+        }
+        if (left <= 0) {
+          sendBtn.disabled = true;
+          inputEl.placeholder = "今日使用次数已用完，明天再来吧～";
+          inputEl.disabled = true;
+        }
       }
 
       /* ---------- 事件绑定 ---------- */
@@ -363,7 +390,7 @@
       /* ---------- 聊天记录持久化 ---------- */
       function loadHistory() {
         try {
-          var saved = JSON.parse(sessionStorage.getItem(HISTORY_KEY) || "[]");
+          var saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
           if (Array.isArray(saved)) messages = saved;
         } catch (e) {
           messages = [];
@@ -372,7 +399,7 @@
 
       function saveHistory() {
         try {
-          sessionStorage.setItem(HISTORY_KEY, JSON.stringify(messages));
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(messages));
         } catch (e) { /* 容量满等异常，忽略 */ }
       }
 
@@ -436,6 +463,11 @@
         text = (text || "").replace(/^\s+|\s+$/g, "");
         if (!text) return;
 
+        if (remaining() <= 0) {
+          appendMessage("assistant", "⚠ 今日使用次数已用完（" + DAILY_LIMIT + " 次），明天再来吧～");
+          return;
+        }
+
         messages.push({ role: "user", content: text });
         saveHistory();
         appendMessage("user", text);
@@ -449,46 +481,41 @@
 
         callChatApi(messages.slice()).then(function (reply) {
           removeTyping(typingEl);
+          incrementUsage();
+          renderUsage();
           messages.push({ role: "assistant", content: reply });
           saveHistory();
           appendMessage("assistant", reply);
         }).catch(function (err) {
           removeTyping(typingEl);
           var msg = (err && err.message) ? err.message : "未知错误";
-          appendMessage("assistant", "⚠ 抱歉，发送失败：" + msg + "\n\n请稍后重试，或检查登录状态。");
+          appendMessage("assistant", "⚠ 抱歉，发送失败：" + msg + "\n\n请稍后重试。");
         }).then(function () {
           sending = false;
-          sendBtn.disabled = false;
+          sendBtn.disabled = remaining() <= 0;
           inputEl.focus();
         });
       }
 
       function callChatApi(msgs) {
-        var token = sessionStorage.getItem(TOKEN_KEY);
-        if (!token) {
-          showLogin();
-          return Promise.reject(new Error("未登录"));
-        }
+        // 如果有 token 就带上（可选），没有也可以调用
+        var token = sessionStorage.getItem(TOKEN_KEY) || "";
+        var headers = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = "Bearer " + token;
+
         return fetch(API_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + token
-          },
+          headers: headers,
           body: JSON.stringify({ messages: msgs })
         }).then(function (res) {
-          if (res.status === 401 || res.status === 403) {
-            // token 失效，清除并提示登录
-            sessionStorage.removeItem(TOKEN_KEY);
-            showLogin();
-            throw new Error("登录已失效，请重新登录");
-          }
-          return res.json().then(function (data) {
+          return res.text().then(function (text) {
+            var data;
+            try { data = JSON.parse(text); } catch (e) {
+              throw new Error("AI 服务未就绪：站点需部署到 Cloudflare Pages 后才能使用 AI 功能");
+            }
             if (!res.ok) throw new Error(data.error || ("请求失败 (" + res.status + ")"));
             if (data.error) throw new Error(data.error);
-            if (typeof data.reply !== "string") {
-              throw new Error("返回格式异常");
-            }
+            if (typeof data.reply !== "string") throw new Error("返回格式异常");
             return data.reply;
           });
         });
@@ -514,12 +541,11 @@
         // 2. 按行处理：标题 / 列表 / 段落
         var lines = escaped.split("\n");
         var out = [];
-        var listType = null; // 'ul' | 'ol' | null
+        var listType = null;
 
         for (var i = 0; i < lines.length; i++) {
           var line = lines[i];
 
-          // 代码块占位行，原样保留
           if (/^\u0000CODEBLOCK\d+\u0000$/.test(line)) {
             if (listType) { out.push("</" + listType + ">"); listType = null; }
             out.push(line);
@@ -560,7 +586,6 @@
 
         var html = out.join("\n");
 
-        // 3. 还原代码块
         html = html.replace(/\u0000CODEBLOCK(\d+)\u0000/g, function (m, idx) {
           return '<pre class="code-block"><code>' + codeBlocks[+idx] + '</code></pre>';
         });
@@ -569,9 +594,7 @@
       }
 
       function inlineMd(text) {
-        // 行内代码
         text = text.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
-        // 加粗
         text = text.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
         return text;
       }
