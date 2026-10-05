@@ -1,3 +1,4 @@
+// 全局中间件：CORS 处理
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
@@ -9,7 +10,6 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers: CORS });
   }
   const res = await context.next();
-  // 注入 CORS 头到所有响应
   const newRes = new Response(res.body, res);
   for (const [k, v] of Object.entries(CORS)) newRes.headers.set(k, v);
   return newRes;

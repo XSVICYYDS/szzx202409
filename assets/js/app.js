@@ -2,7 +2,7 @@
    尚志中学 2024 届 09 班班级官网 — 前端共享脚本 v4 (Cloudflare Pages + D1)
    数据：GET /api/data (D1 数据库)
    写操作：POST/PUT/DELETE /api/* (JWT 鉴权)
-   AI 聊天：POST /api/ai/chat (OpenRouter)
+   AI 聊天：POST /api/chat (OpenRouter，公开访问)
    ===================================================================== */
 
 (function (global) {

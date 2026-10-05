@@ -1,0 +1,15 @@
+{
+  "name": "szzx202409",
+  "version": "2.0.0",
+  "description": "尚志中学2024届09班班级官网 - Cloudflare Pages + Functions + D1",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev . --d1 DB=user_data",
+    "deploy": "wrangler pages deploy . --project-name=szzx202409",
+    "d1:init": "wrangler d1 execute user_data --file=schema.sql",
+    "d1:remote": "wrangler d1 execute user_data --file=schema.sql --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}
