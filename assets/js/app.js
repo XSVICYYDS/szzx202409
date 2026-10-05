@@ -239,6 +239,7 @@
   function loginStudentFallback(studentNo) {
     var s = cache.students.find(function (x) { return x.studentNo === studentNo; });
     if (!s) return { ok: false, msg: "学号不存在，请检查后重试" };
+    setToken("local-fallback-student-" + s.studentNo);
     setSession({ role: "student", studentNo: s.studentNo, name: s.name });
     return { ok: true, student: { studentNo: s.studentNo, name: s.name } };
   }
@@ -268,19 +269,20 @@
     var u = users.find(function (x) { return x.username === username; });
     var salt = "szzx202409-salt";
     if (u && u.passwordHash) {
-      // 8 位哈希用 simpleHash 比对
       if (u.passwordHash.length === 8 && u.passwordHash === simpleHash(salt + password)) {
+        setToken("local-fallback-admin-" + u.username);
         setSession({ role: "admin", username: u.username });
         return { ok: true };
       }
-      // 明文兜底（仅开发环境）
       if (u.passwordHash === password) {
+        setToken("local-fallback-admin-" + u.username);
         setSession({ role: "admin", username: u.username });
         return { ok: true };
       }
     }
     // 默认账号兜底
     if (username === "szzx202409" && password === "szzx202409") {
+      setToken("local-fallback-admin-szzx202409");
       setSession({ role: "admin", username: "szzx202409" });
       return { ok: true };
     }
