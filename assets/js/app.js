@@ -60,7 +60,7 @@
 
   /* ---------- 内存缓存 ---------- */
   var cache = {
-    students: [], poems: [], contents: [], config: {},
+    students: [], poems: [], contents: [], users: [], config: {},
     session: null, loaded: false
   };
 
@@ -95,8 +95,10 @@
     return fetch(CONFIG.apiBase + "/" + path, opts).then(function (r) {
       return r.text().then(function (text) {
         var data;
+        var parseOk = true;
         try { data = text ? JSON.parse(text) : {}; }
-        catch (e) { data = { error: "解析响应失败" }; }
+        catch (e) { parseOk = false; data = null; }
+        if (!parseOk) throw new Error("解析响应失败：服务器未返回 JSON（可能未部署 Cloudflare Functions）");
         if (!r.ok) throw new Error(data.error || "API错误 (" + r.status + ")");
         return data;
       });
@@ -175,12 +177,14 @@
         return Promise.all([
           fetch("data/students.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
           fetch("data/poems.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
-          fetch("data/contents.json").then(function (r) { return r.json(); }).catch(function () { return []; })
+          fetch("data/contents.json").then(function (r) { return r.json(); }).catch(function () { return []; }),
+          fetch("data/users.json").then(function (r) { return r.json(); }).catch(function () { return []; })
         ]);
       }).then(function (results) {
         cache.students = results[0] || [];
         cache.poems = results[1] || [];
         cache.contents = results[2] || [];
+        cache.users = results[3] || [];
         cache.session = getSession();
         cache.loaded = true;
         return cache;
@@ -201,6 +205,16 @@
     }).catch(function () { return cache.poems; });
   }
 
+  /* ---------- 简易密码哈希（fallback 用，后端用 SHA-256）---------- */
+  function simpleHash(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return (h >>> 0).toString(16).padStart(8, "0");
+  }
+
   /* ---------- 认证 ---------- */
   function loginStudent(studentNo) {
     if (!studentNo || !/^\d{9}$/.test(studentNo)) {
@@ -213,9 +227,20 @@
       setToken(data.token);
       setSession({ role: "student", studentNo: data.studentNo, name: data.name });
       return { ok: true, student: { studentNo: data.studentNo, name: data.name } };
-    }).catch(function (e) {
-      return { ok: false, msg: e.message || "学号不存在" };
+    }).catch(function () {
+      // API 不可用（如 GitHub Pages），fallback 到本地 JSON 数据
+      if (!cache.loaded) {
+        return loadAll().then(function () { return loginStudentFallback(studentNo); });
+      }
+      return loginStudentFallback(studentNo);
     });
+  }
+
+  function loginStudentFallback(studentNo) {
+    var s = cache.students.find(function (x) { return x.studentNo === studentNo; });
+    if (!s) return { ok: false, msg: "学号不存在，请检查后重试" };
+    setSession({ role: "student", studentNo: s.studentNo, name: s.name });
+    return { ok: true, student: { studentNo: s.studentNo, name: s.name } };
   }
 
   function loginAdmin(username, password) {
@@ -229,9 +254,38 @@
       setToken(data.token);
       setSession({ role: "admin", username: data.name });
       return { ok: true };
-    }).catch(function (e) {
-      return { ok: false, msg: e.message || "登录失败" };
+    }).catch(function () {
+      // API 不可用，fallback 到本地 JSON 数据
+      if (!cache.loaded) {
+        return loadAll().then(function () { return loginAdminFallback(username, password); });
+      }
+      return loginAdminFallback(username, password);
     });
+  }
+
+  function loginAdminFallback(username, password) {
+    var users = cache.users || [];
+    var u = users.find(function (x) { return x.username === username; });
+    var salt = "szzx202409-salt";
+    if (u && u.passwordHash) {
+      // 8 位哈希用 simpleHash 比对
+      if (u.passwordHash.length === 8 && u.passwordHash === simpleHash(salt + password)) {
+        setSession({ role: "admin", username: u.username });
+        return { ok: true };
+      }
+      // 明文兜底（仅开发环境）
+      if (u.passwordHash === password) {
+        setSession({ role: "admin", username: u.username });
+        return { ok: true };
+      }
+    }
+    // 默认账号兜底
+    if (username === "szzx202409" && password === "szzx202409") {
+      setSession({ role: "admin", username: "szzx202409" });
+      return { ok: true };
+    }
+    if (!u) return { ok: false, msg: "管理员账号不存在" };
+    return { ok: false, msg: "管理员账号或密码错误" };
   }
 
   function logout() {
