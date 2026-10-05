@@ -61,7 +61,7 @@
   /* ---------- 内存缓存 ---------- */
   var cache = {
     students: [], poems: [], contents: [], users: [], config: {},
-    session: null, loaded: false
+    session: null, loaded: false, apiOnline: null
   };
 
   /* ---------- 会话管理 (sessionStorage) ---------- */
@@ -83,14 +83,22 @@
     else sessionStorage.removeItem(TOKEN_KEY);
   }
 
+  /* ---------- 静态托管模式提示 ---------- */
+  var STATIC_MSG = "当前为静态托管模式（GitHub Pages），此操作需要后端支持。请部署 Cloudflare Functions 后使用。";
+
   /* ---------- API 调用 ---------- */
   function api(path, options) {
     options = options || {};
+    // 静态托管模式下，非读操作直接拒绝
+    var method = (options.method || "GET").toUpperCase();
+    if (cache.apiOnline === false && method !== "GET") {
+      return Promise.reject(new Error(STATIC_MSG));
+    }
     var token = getToken();
     var headers = { "Content-Type": "application/json" };
     if (token) headers["Authorization"] = "Bearer " + token;
     if (options.headers) for (var k in options.headers) headers[k] = options.headers[k];
-    var opts = { method: options.method || "GET", headers: headers };
+    var opts = { method: method, headers: headers };
     if (options.body) opts.body = options.body;
     return fetch(CONFIG.apiBase + "/" + path, opts).then(function (r) {
       return r.text().then(function (text) {
@@ -98,7 +106,11 @@
         var parseOk = true;
         try { data = text ? JSON.parse(text) : {}; }
         catch (e) { parseOk = false; data = null; }
-        if (!parseOk) throw new Error("解析响应失败：服务器未返回 JSON（可能未部署 Cloudflare Functions）");
+        if (!parseOk) {
+          cache.apiOnline = false;
+          throw new Error(STATIC_MSG);
+        }
+        cache.apiOnline = true;
         if (!r.ok) throw new Error(data.error || "API错误 (" + r.status + ")");
         return data;
       });
@@ -106,6 +118,9 @@
   }
 
   function apiUpload(path, formData) {
+    if (cache.apiOnline === false) {
+      return Promise.reject(new Error(STATIC_MSG));
+    }
     var token = getToken();
     var headers = {};
     if (token) headers["Authorization"] = "Bearer " + token;
@@ -113,9 +128,14 @@
       method: "POST", headers: headers, body: formData
     }).then(function (r) {
       return r.json().then(function (data) {
+        cache.apiOnline = true;
         if (!r.ok) throw new Error(data.error || "上传失败 (" + r.status + ")");
         return data;
       });
+    }).catch(function (e) {
+      if (e.message === STATIC_MSG) throw e;
+      cache.apiOnline = false;
+      throw new Error(STATIC_MSG);
     });
   }
 
@@ -641,6 +661,7 @@
     uploadContent: uploadContent,
     approveContent: approveContent, rejectContent: rejectContent, deleteContent: deleteContent,
     saveSecrets: saveSecrets, checkSecrets: checkSecrets,
+    isApiOnline: function () { return cache.apiOnline; },
     api: api,
     contentCount: contentCount, poemCount: poemCount,
     escapeHtml: escapeHtml, fmtDate: fmtDate, fmtSize: fmtSize,
